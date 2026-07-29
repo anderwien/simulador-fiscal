@@ -40,8 +40,8 @@ export default function BreakdownTreemap({ segments, formatCurrency, emptyMessag
   );
 
   return (
-    <div>
-      <div className="relative w-full h-72 md:h-80 rounded-xl overflow-hidden border border-slate-200 shadow-inner bg-slate-100">
+    <div className="flex flex-col md:flex-row gap-4">
+      <div className="relative flex-1 w-full h-72 md:h-80 rounded-xl overflow-hidden border border-slate-200 shadow-inner bg-slate-100">
         {rects.map((rect) => {
           const seg = visibleSegments.find((s) => s.id === rect.id);
           if (!seg) return null;
@@ -58,7 +58,7 @@ export default function BreakdownTreemap({ segments, formatCurrency, emptyMessag
               onMouseEnter={() => setHoveredId(seg.id)}
               onMouseLeave={() => setHoveredId(null)}
               onClick={() => setHoveredId(seg.id)}
-              className={`absolute flex flex-col items-start justify-end overflow-hidden p-1.5 border border-white/30 cursor-pointer transition-all duration-200 ${seg.color} ${isHovered ? 'z-10 brightness-110 shadow-lg' : ''} ${isDimmed ? 'opacity-50' : 'opacity-100'}`}
+              className={`absolute overflow-hidden border border-white/30 cursor-pointer transition-all duration-200 ${seg.color} ${isHovered ? 'z-10 brightness-110 shadow-lg' : ''} ${isDimmed ? 'opacity-50' : 'opacity-100'}`}
               style={{
                 left: `${(rect.x / TREEMAP_W) * 100}%`,
                 top: `${(rect.y / TREEMAP_H) * 100}%`,
@@ -67,14 +67,17 @@ export default function BreakdownTreemap({ segments, formatCurrency, emptyMessag
               }}
             >
               {showLabel && (
-                <>
+                <div className="absolute top-0 left-0 right-0 flex flex-col items-start p-1.5">
                   <span className={`${compact ? 'text-[9px]' : 'text-xs'} font-bold text-white/90 leading-tight break-words w-full`}>{seg.label}</span>
                   <span className={`${compact ? 'text-[9px]' : 'text-[11px]'} text-white/80 leading-tight break-words w-full`}>{formatCurrency(seg.amount)}</span>
-                  <span className={`${compact ? 'text-xs' : 'text-base'} font-extrabold text-white leading-tight break-words w-full`}>{seg.porc.toFixed(1)}%</span>
-                </>
+                </div>
               )}
-              {showPctOnly && (
-                <span className="text-sm font-extrabold text-white w-full text-center leading-tight">{seg.porc.toFixed(0)}%</span>
+              {(showLabel || showPctOnly) && (
+                <div className="absolute inset-0 flex items-center justify-center p-1 pointer-events-none">
+                  <span className={`${showPctOnly ? 'text-sm' : compact ? 'text-base' : 'text-xl'} font-extrabold text-white leading-none drop-shadow-sm`}>
+                    {seg.porc.toFixed(1)}%
+                  </span>
+                </div>
               )}
               <div
                 className={`pointer-events-none absolute -top-9 left-1/2 -translate-x-1/2 origin-bottom bg-slate-800 text-white text-xs py-1 px-2 rounded z-20 whitespace-nowrap transition-transform ${isHovered ? 'scale-100' : 'scale-0'}`}
@@ -86,7 +89,7 @@ export default function BreakdownTreemap({ segments, formatCurrency, emptyMessag
         })}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-6">
+      <div className="flex flex-row md:flex-col flex-wrap md:flex-nowrap gap-1.5 md:w-40 shrink-0 md:max-h-80 md:overflow-y-auto">
         {visibleSegments.map((seg) => {
           const isHovered = hoveredId === seg.id;
           return (
@@ -96,13 +99,13 @@ export default function BreakdownTreemap({ segments, formatCurrency, emptyMessag
               onMouseEnter={() => setHoveredId(seg.id)}
               onMouseLeave={() => setHoveredId(null)}
               onClick={() => setHoveredId(seg.id)}
-              className={`flex items-center gap-2 text-sm text-left p-1.5 rounded-lg transition-colors ${isHovered ? 'bg-slate-100' : ''}`}
+              className={`flex items-start gap-1.5 text-left p-1 rounded-lg transition-colors ${isHovered ? 'bg-slate-100' : ''}`}
             >
-              <div className={`w-3 h-3 rounded-full ${seg.color} shrink-0 mt-0.5`}></div>
+              <div className={`w-2.5 h-2.5 rounded-full ${seg.color} shrink-0 mt-0.5`}></div>
               <div className="min-w-0">
-                <p className="font-medium text-slate-700 text-xs leading-snug break-words">{seg.label}</p>
-                <p className="text-xs text-slate-500">
-                  {formatCurrency(seg.amount)} · <span className="font-extrabold text-sm text-slate-800">{seg.porc.toFixed(1)}%</span>
+                <p className="font-medium text-slate-700 text-[11px] leading-snug break-words">{seg.label}</p>
+                <p className="text-[10px] text-slate-500">
+                  {formatCurrency(seg.amount)} · <span className="font-extrabold text-xs text-slate-800">{seg.porc.toFixed(1)}%</span>
                 </p>
               </div>
             </button>

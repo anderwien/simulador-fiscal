@@ -112,7 +112,6 @@ export default function App() {
   const [showOptimization, setShowOptimization] = useState(false);
   const [showCosteEmpresa, setShowCosteEmpresa] = useState(false);
   const [showRetencion, setShowRetencion] = useState(false);
-  const [showInfoTecnica, setShowInfoTecnica] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
   const [employerSSRate, setEmployerSSRate] = useState(31);
   const [includeEmployerCost, setIncludeEmployerCost] = useState(false);
@@ -568,6 +567,27 @@ export default function App() {
                   })}
                 </div>
               </div>
+
+              {/* Información Técnica */}
+              <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</h2>
+                <div className="space-y-4">
+                  {calculations.hasAutonomo && (
+                    <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <AlertCircle className="shrink-0 text-slate-400" size={18} />
+                      <p>{t.infoTecnicaText}</p>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 text-sm text-indigo-700 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
+                    <Target className="shrink-0 text-indigo-500" size={18} />
+                    <div>
+                      <p className="font-bold mb-1">{t.tipoMarginalActual((calculations.marginalRate * 100).toFixed(1))}</p>
+                      <p className="text-indigo-600">{t.tipoMarginalText((calculations.marginalRate * 100).toFixed(1))}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* COLUMNA DERECHA: RESULTADOS */}
@@ -586,6 +606,73 @@ export default function App() {
                 )}
                 <BreakdownTreemap segments={treemapSegments} formatCurrency={formatCurrency} emptyMessage={t.introduceIngresos} />
               </div>
+
+              {/* Coste Empresa + Retención IRPF, uno junto al otro */}
+              {calculations.hasEmpleado && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  {/* Coste para la Empresa */}
+                  <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                    <button
+                      onClick={() => setShowCosteEmpresa(!showCosteEmpresa)}
+                      className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
+                    >
+                      <span className="flex items-center gap-2"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</span>
+                      {showCosteEmpresa ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                    </button>
+
+                    {showCosteEmpresa && (
+                      <div className="mt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <input
+                            type="number"
+                            value={employerSSRate}
+                            onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
+                            className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
+                        </div>
+                        <div className="space-y-2 text-sm">
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
+                            <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
+                          </div>
+                          <div className="flex justify-between items-center">
+                            <span className="text-slate-500">{t.ssEmpresaLabel}</span>
+                            <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                            <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
+                            <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Retención IRPF Estimada */}
+                  <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <button
+                      onClick={() => setShowRetencion(!showRetencion)}
+                      className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
+                    >
+                      <span className="flex items-center gap-2"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</span>
+                      {showRetencion ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                    </button>
+
+                    {showRetencion && (
+                      <div className="mt-4">
+                        <div className="mb-3">
+                          <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.tipoRetencionSublabel}</p>
+                          <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
+                        </div>
+                        <p className="text-sm text-slate-600 mb-3">{t.retencionMensualLabel}: <span className="font-semibold text-slate-700">{formatCurrency(calculations.retencionIRPFMensual)}</span></p>
+                        <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Panel Cuota & Optimización */}
               {calculations.hasAutonomo && (
@@ -661,100 +748,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-
-              {/* Coste para la Empresa */}
-              {calculations.hasEmpleado && (
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <button
-                    onClick={() => setShowCosteEmpresa(!showCosteEmpresa)}
-                    className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
-                  >
-                    <span className="flex items-center gap-2"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</span>
-                    {showCosteEmpresa ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                  </button>
-
-                  {showCosteEmpresa && (
-                    <div className="mt-4">
-                      <div className="flex items-center gap-2 mb-4">
-                        <input
-                          type="number"
-                          value={employerSSRate}
-                          onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
-                          className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
-                        />
-                        <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
-                      </div>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
-                          <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-slate-500">{t.ssEmpresaLabel}</span>
-                          <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
-                        </div>
-                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                          <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
-                          <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
-                        </div>
-                      </div>
-                      <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Retención IRPF Estimada */}
-              {calculations.hasEmpleado && (
-                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                  <button
-                    onClick={() => setShowRetencion(!showRetencion)}
-                    className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
-                  >
-                    <span className="flex items-center gap-2"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</span>
-                    {showRetencion ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                  </button>
-
-                  {showRetencion && (
-                    <div className="mt-4">
-                      <div className="mb-3">
-                        <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.tipoRetencionSublabel}</p>
-                        <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
-                      </div>
-                      <p className="text-sm text-slate-600 mb-3">{t.retencionMensualLabel}: <span className="font-semibold text-slate-700">{formatCurrency(calculations.retencionIRPFMensual)}</span></p>
-                      <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Insights */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                <button
-                  onClick={() => setShowInfoTecnica(!showInfoTecnica)}
-                  className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
-                >
-                  <span className="flex items-center gap-2"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</span>
-                  {showInfoTecnica ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                </button>
-
-                {showInfoTecnica && (
-                 <div className="space-y-4 mt-4">
-                    <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <AlertCircle className="shrink-0 text-slate-400" size={18} />
-                      <p>{t.infoTecnicaText}</p>
-                    </div>
-
-                    <div className="flex gap-3 text-sm text-indigo-700 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                      <Target className="shrink-0 text-indigo-500" size={18} />
-                      <div>
-                        <p className="font-bold mb-1">{t.tipoMarginalActual((calculations.marginalRate * 100).toFixed(1))}</p>
-                        <p className="text-indigo-600">{t.tipoMarginalText((calculations.marginalRate * 100).toFixed(1))}</p>
-                      </div>
-                    </div>
-                 </div>
-                )}
-              </div>
 
             </div>
           </div>
