@@ -32,6 +32,11 @@ export interface Translations {
   gastosDeduciblesLabel: string;
   defaultIncomeName: string;
   nuevoIngreso: string;
+  pagasLabel: string;
+  pagas12: string;
+  pagas14: string;
+  porPagaLabel: string;
+  pagas14InfoText: string;
 
   cuotaAutonomoTitle: string;
   eurMesSegSocial: string;
@@ -115,6 +120,11 @@ export const translations: Record<Lang, Translations> = {
     gastosDeduciblesLabel: 'Gastos Deducibles',
     defaultIncomeName: 'Trabajo Principal',
     nuevoIngreso: 'Nuevo Ingreso',
+    pagasLabel: 'Pagas',
+    pagas12: '12 pagas',
+    pagas14: '14 pagas',
+    porPagaLabel: 'por paga',
+    pagas14InfoText: 'Los sueldos de 14 pagas incluyen dos pagas extra (verano y Navidad) por el mismo importe que una mensualidad ordinaria, por lo que el bruto anual se calcula multiplicando por 14, no por 12.',
 
     cuotaAutonomoTitle: 'Cuota Autónomo',
     eurMesSegSocial: '€/mes a Seg. Social',
@@ -198,6 +208,11 @@ export const translations: Record<Lang, Translations> = {
     gastosDeduciblesLabel: 'Deductible Expenses',
     defaultIncomeName: 'Main Job',
     nuevoIngreso: 'New Income',
+    pagasLabel: 'Pay schedule',
+    pagas12: '12 payments',
+    pagas14: '14 payments',
+    porPagaLabel: 'per payment',
+    pagas14InfoText: 'Salaries paid in 14 installments include two extra payments (summer and Christmas) for the same amount as a regular monthly payment, so the annual gross is calculated by multiplying by 14, not 12.',
 
     cuotaAutonomoTitle: 'Self-Employed Contribution',
     eurMesSegSocial: '€/month to Social Security',

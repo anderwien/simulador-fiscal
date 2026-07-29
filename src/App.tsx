@@ -43,6 +43,7 @@ interface Income {
   type: string;
   amount: number | string;
   expenses: number | string;
+  pagas: number;
 }
 
 interface ImportedIncome {
@@ -51,6 +52,12 @@ interface ImportedIncome {
   type?: string;
   amount?: number;
   expenses?: number;
+  pagas?: number;
+}
+
+/** Multiplicador mensual->anual: pagas extra solo aplican a rentas de trabajo por cuenta ajena. */
+function getIncomeFactor(inc: { type: string; pagas: number }): number {
+  return inc.type === 'empleado' && inc.pagas === 14 ? 14 : 12;
 }
 
 interface ImportedData {
@@ -104,14 +111,12 @@ export default function App() {
 
   // Estado Incomes y Cuota
   const [incomes, setIncomes] = useState<Income[]>([
-    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 25000, expenses: 0 }
+    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 25000, expenses: 0, pagas: 12 }
   ]);
   const [incomePeriod, setIncomePeriod] = useState<'mensual' | 'anual'>('anual');
   const [autonomoQuota, setAutonomoQuota] = useState(478.79);
   const [autoCalculateQuota, setAutoCalculateQuota] = useState(true);
   const [showOptimization, setShowOptimization] = useState(false);
-  const [showCosteEmpresa, setShowCosteEmpresa] = useState(false);
-  const [showRetencion, setShowRetencion] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
   const [employerSSRate, setEmployerSSRate] = useState(31);
   const [includeEmployerCost, setIncludeEmployerCost] = useState(false);
@@ -132,9 +137,9 @@ export default function App() {
     let autonomoGrossAnual = 0;
     let autonomoExpensesAnual = 0;
 
-    // Sumar ingresos
-    const multiplier = incomePeriod === 'mensual' ? 12 : 1;
+    // Sumar ingresos (los sueldos de 14 pagas anualizan con 14 mensualidades, no 12)
     incomes.forEach(inc => {
+      const multiplier = incomePeriod === 'mensual' ? getIncomeFactor(inc) : 1;
       const safeAmount = Number(inc.amount) || 0;
       const safeExpenses = Number(inc.expenses) || 0;
       const anualAmount = safeAmount * multiplier;
@@ -256,13 +261,14 @@ export default function App() {
 
   const addIncome = () => {
     const defaultAmount = incomePeriod === 'anual' ? 12000 : 1000;
-    setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: defaultAmount, expenses: 0 }]);
+    setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: defaultAmount, expenses: 0, pagas: 12 }]);
   };
 
   const updateIncome = (id: number, field: string, value: string) => {
     setIncomes(incomes.map(inc => {
       if (inc.id !== id) return inc;
       if (field === 'name' || field === 'type') return { ...inc, [field]: value };
+      if (field === 'pagas') return { ...inc, pagas: Number(value) === 14 ? 14 : 12 };
 
       let parsedValue: number | string = value === '' ? '' : Number(value);
       if (typeof parsedValue === 'number' && Number.isNaN(parsedValue)) parsedValue = 0;
@@ -272,13 +278,16 @@ export default function App() {
 
   const changeIncomePeriod = (newPeriod: 'mensual' | 'anual') => {
     if (newPeriod === incomePeriod) return;
-    const factor = newPeriod === 'anual' ? 12 : 1 / 12;
     const round2 = (n: number) => Math.round(n * 100) / 100;
-    setIncomes(prev => prev.map(inc => ({
-      ...inc,
-      amount: round2((Number(inc.amount) || 0) * factor),
-      expenses: round2((Number(inc.expenses) || 0) * factor),
-    })));
+    setIncomes(prev => prev.map(inc => {
+      const incomeFactor = getIncomeFactor(inc);
+      const factor = newPeriod === 'anual' ? incomeFactor : 1 / incomeFactor;
+      return {
+        ...inc,
+        amount: round2((Number(inc.amount) || 0) * factor),
+        expenses: round2((Number(inc.expenses) || 0) * factor),
+      };
+    }));
     setIncomePeriod(newPeriod);
   };
 
@@ -321,6 +330,7 @@ export default function App() {
           type: inc.type === 'autonomo' ? 'autonomo' : 'empleado',
           amount: Number(inc.amount) || 0,
           expenses: Number(inc.expenses) || 0,
+          pagas: inc.pagas === 14 ? 14 : 12,
         }));
 
         setIncomes(parsedIncomes);
@@ -543,9 +553,23 @@ export default function App() {
                         </button>
                       </div>
 
+                      {inc.type === 'empleado' && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <label className="text-xs font-medium text-slate-500">{t.pagasLabel}</label>
+                          <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200">
+                            <button type="button" onClick={() => updateIncome(inc.id, 'pagas', '12')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 12 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
+                              {t.pagas12}
+                            </button>
+                            <button type="button" onClick={() => updateIncome(inc.id, 'pagas', '14')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 14 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
+                              {t.pagas14}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="mb-2">
                         <label className="text-xs font-medium text-slate-500">
-                          {t.ingresoLabel} ({incomePeriod === 'anual' ? t.periodAnual : t.periodMensual})
+                          {t.ingresoLabel} ({incomePeriod === 'anual' ? t.periodAnual : t.periodMensual}{inc.type === 'empleado' && inc.pagas === 14 && incomePeriod === 'mensual' ? ` · ${t.porPagaLabel}` : ''})
                         </label>
                         <div className="flex items-center gap-2 mt-1">
                           <input type="range" min="0" max={sliderMax} step={sliderStep} value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="flex-1 accent-indigo-600"/>
@@ -576,6 +600,13 @@ export default function App() {
                     <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
                       <AlertCircle className="shrink-0 text-slate-400" size={18} />
                       <p>{t.infoTecnicaText}</p>
+                    </div>
+                  )}
+
+                  {incomes.some(inc => inc.type === 'empleado' && inc.pagas === 14) && (
+                    <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                      <AlertCircle className="shrink-0 text-slate-400" size={18} />
+                      <p>{t.pagas14InfoText}</p>
                     </div>
                   )}
 
@@ -612,64 +643,42 @@ export default function App() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Coste para la Empresa */}
                   <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                    <button
-                      onClick={() => setShowCosteEmpresa(!showCosteEmpresa)}
-                      className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
-                    >
-                      <span className="flex items-center gap-2"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</span>
-                      {showCosteEmpresa ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                    </button>
-
-                    {showCosteEmpresa && (
-                      <div className="mt-4">
-                        <div className="flex items-center gap-2 mb-4">
-                          <input
-                            type="number"
-                            value={employerSSRate}
-                            onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
-                            className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
-                        </div>
-                        <div className="space-y-2 text-sm">
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
-                            <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
-                          </div>
-                          <div className="flex justify-between items-center">
-                            <span className="text-slate-500">{t.ssEmpresaLabel}</span>
-                            <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
-                          </div>
-                          <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                            <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
-                            <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
-                          </div>
-                        </div>
-                        <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
+                    <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</h2>
+                    <div className="flex items-center gap-2 mb-4">
+                      <input
+                        type="number"
+                        value={employerSSRate}
+                        onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
+                        className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
+                        <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
                       </div>
-                    )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500">{t.ssEmpresaLabel}</span>
+                        <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                        <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
+                        <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
                   </div>
 
                   {/* Retención IRPF Estimada */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <button
-                      onClick={() => setShowRetencion(!showRetencion)}
-                      className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
-                    >
-                      <span className="flex items-center gap-2"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</span>
-                      {showRetencion ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                    </button>
-
-                    {showRetencion && (
-                      <div className="mt-4">
-                        <div className="mb-3">
-                          <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.tipoRetencionSublabel}</p>
-                          <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
-                        </div>
-                        <p className="text-sm text-slate-600 mb-3">{t.retencionMensualLabel}: <span className="font-semibold text-slate-700">{formatCurrency(calculations.retencionIRPFMensual)}</span></p>
-                        <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
-                      </div>
-                    )}
+                    <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</h2>
+                    <div className="mb-3">
+                      <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.tipoRetencionSublabel}</p>
+                      <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
+                    </div>
+                    <p className="text-sm text-slate-600 mb-3">{t.retencionMensualLabel}: <span className="font-semibold text-slate-700">{formatCurrency(calculations.retencionIRPFMensual)}</span></p>
+                    <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
                   </div>
                 </div>
               )}
