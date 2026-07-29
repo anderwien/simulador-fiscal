@@ -586,6 +586,33 @@ export default function App() {
                           </div>
                         </div>
                       )}
+
+                      {inc.type === 'empleado' && inc.pagas === 14 && (() => {
+                        const perPaymentBruto = incomePeriod === 'anual' ? (Number(inc.amount) || 0) / 14 : (Number(inc.amount) || 0);
+                        const ssAnualEstaFuente = perPaymentBruto * 14 * DEDUCCION_SS_EMPLEADO;
+                        const ssPerOrdinaria = ssAnualEstaFuente / 12;
+                        const irpfPerPago = (calculations.tipoRetencionEstimado / 100) * perPaymentBruto;
+                        const netoOrdinaria = perPaymentBruto - ssPerOrdinaria - irpfPerPago;
+                        const netoExtra = perPaymentBruto - irpfPerPago;
+                        return (
+                          <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3 text-xs">
+                            <div>
+                              <p className="font-semibold text-slate-600 mb-1">{t.nominaOrdinariaLabel}</p>
+                              <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
+                              <p className="text-amber-600">−SS: {formatCurrency(ssPerOrdinaria)}</p>
+                              <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
+                              <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoOrdinaria)}</p>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-slate-600 mb-1">{t.pagaExtraLabel}</p>
+                              <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
+                              <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
+                              <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoExtra)}</p>
+                              <p className="text-slate-400">({t.sinSSLabel})</p>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                     );
                   })}
