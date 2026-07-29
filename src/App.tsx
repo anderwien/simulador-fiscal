@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload } from 'lucide-react';
+import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload, Building2, Receipt } from 'lucide-react';
 import { translations, type Lang } from './i18n';
 import BreakdownTreemap from './components/BreakdownTreemap';
 
@@ -42,7 +42,6 @@ interface Income {
   name: string;
   type: string;
   amount: number | string;
-  period: string;
   expenses: number | string;
 }
 
@@ -51,17 +50,52 @@ interface ImportedIncome {
   name?: string;
   type?: string;
   amount?: number;
-  period?: string;
   expenses?: number;
 }
 
 interface ImportedData {
   incomes?: ImportedIncome[];
+  incomePeriod?: string;
+  employerSSRate?: number;
   autonomoQuota?: number;
   autoCalculateQuota?: boolean;
   ccaa?: string;
   estadoCivil?: string;
   hijos?: number;
+}
+
+interface IrpfTramo {
+  max: number;
+  rate: number;
+}
+
+/** Progressive IRPF calculation over a base, reused for the full declaration and for the employer-retention-only estimate. */
+function computeIrpfProgressive(base: number, minimoPersonal: number, tramos: IrpfTramo[]) {
+  let baseRestante = base;
+  let minimoRestante = minimoPersonal;
+  let limiteAnterior = 0;
+  let cuotaTotal = 0;
+  let marginalRate = 0;
+  const breakdown: { rate: number; amount: number; tramoIndex: number }[] = [];
+
+  tramos.forEach((tramo, index) => {
+    const anchoTramo = tramo.max - limiteAnterior;
+    const amountBaseInTramo = Math.max(0, Math.min(baseRestante, anchoTramo));
+    const amountMinimoInTramo = Math.max(0, Math.min(minimoRestante, anchoTramo));
+    const taxInTramo = (amountBaseInTramo * tramo.rate) - (amountMinimoInTramo * tramo.rate);
+
+    if (amountBaseInTramo > 0) {
+      cuotaTotal += taxInTramo;
+      marginalRate = tramo.rate;
+      breakdown.push({ rate: tramo.rate * 100, amount: taxInTramo, tramoIndex: index });
+    }
+
+    baseRestante -= amountBaseInTramo;
+    minimoRestante -= amountMinimoInTramo;
+    limiteAnterior = tramo.max;
+  });
+
+  return { cuota: Math.max(0, cuotaTotal), marginalRate, breakdown };
 }
 
 export default function App() {
@@ -70,12 +104,14 @@ export default function App() {
 
   // Estado Incomes y Cuota
   const [incomes, setIncomes] = useState<Income[]>([
-    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 25000, period: 'anual', expenses: 0 }
+    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 25000, expenses: 0 }
   ]);
+  const [incomePeriod, setIncomePeriod] = useState<'mensual' | 'anual'>('anual');
   const [autonomoQuota, setAutonomoQuota] = useState(478.79);
   const [autoCalculateQuota, setAutoCalculateQuota] = useState(true);
   const [showOptimization, setShowOptimization] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
+  const [employerSSRate, setEmployerSSRate] = useState(31);
 
   // Estados Personales IRPF
   const [ccaa, setCcaa] = useState('Comunidad Valenciana');
@@ -94,8 +130,8 @@ export default function App() {
     let autonomoExpensesAnual = 0;
 
     // Sumar ingresos
+    const multiplier = incomePeriod === 'mensual' ? 12 : 1;
     incomes.forEach(inc => {
-      const multiplier = inc.period === 'mensual' ? 12 : 1;
       const safeAmount = Number(inc.amount) || 0;
       const safeExpenses = Number(inc.expenses) || 0;
       const anualAmount = safeAmount * multiplier;
@@ -142,42 +178,27 @@ export default function App() {
     const rendimientosTrabajo = (grossAnualTotal - autonomoGrossAnual) - ssEmpleadoAnual;
     const baseImponible = rendimientosTrabajo + rendimientoNetoIRPF;
 
-    // 5. Cálculo IRPF progresivo
+    // 5. Cálculo IRPF progresivo (declaración completa: trabajo + autónomo)
     const tramosAplicables = CCAA_RATES[ccaa as keyof typeof CCAA_RATES];
-    let irpfBreakdown: { rate: number; amount: number; color: string; porcentajeDelBruto: number }[] = [];
-    let cuotaIRPF_Total = 0;
-    let marginalRate = 0;
+    const { cuota: cuotaIRPF_Total, marginalRate, breakdown: irpfBreakdownRaw } = computeIrpfProgressive(baseImponible, minimoPersonal, tramosAplicables);
+    const irpfBreakdown = irpfBreakdownRaw.map(b => ({
+      rate: b.rate,
+      amount: b.amount,
+      color: IRPF_COLORS[b.tramoIndex],
+      porcentajeDelBruto: grossAnualTotal > 0 ? (b.amount / grossAnualTotal) * 100 : 0
+    }));
 
-    let baseRestante = baseImponible;
-    let minimoRestante = minimoPersonal;
-    let limiteAnterior = 0;
+    // 5b. Retención IRPF estimada que debería aplicar el empleador (solo rendimientos del trabajo)
+    const { cuota: retencionIRPFAnual } = computeIrpfProgressive(Math.max(0, rendimientosTrabajo), minimoPersonal, tramosAplicables);
+    const tipoRetencionEstimado = rendimientosTrabajo > 0 ? (retencionIRPFAnual / rendimientosTrabajo) * 100 : 0;
 
-    tramosAplicables.forEach((tramo: { max: number; rate: number }, index: number) => {
-      const anchoTramo = tramo.max - limiteAnterior;
-      const amountBaseInTramo = Math.max(0, Math.min(baseRestante, anchoTramo));
-      const amountMinimoInTramo = Math.max(0, Math.min(minimoRestante, anchoTramo));
-
-      const taxInTramo = (amountBaseInTramo * tramo.rate) - (amountMinimoInTramo * tramo.rate);
-
-      if (amountBaseInTramo > 0) {
-        cuotaIRPF_Total += taxInTramo;
-        marginalRate = tramo.rate;
-        irpfBreakdown.push({
-          rate: tramo.rate * 100,
-          amount: taxInTramo,
-          color: IRPF_COLORS[index],
-          porcentajeDelBruto: grossAnualTotal > 0 ? (taxInTramo / grossAnualTotal) * 100 : 0
-        });
-      }
-
-      baseRestante -= amountBaseInTramo;
-      minimoRestante -= amountMinimoInTramo;
-      limiteAnterior = tramo.max;
-    });
-
-    cuotaIRPF_Total = Math.max(0, cuotaIRPF_Total);
     const ssTotalAnual = ssEmpleadoAnual + ssAutonomoAnual;
     const netAnual = grossAnualTotal - ssTotalAnual - cuotaIRPF_Total - autonomoExpensesAnual;
+
+    // 6. Coste para la empresa (Seguridad Social a cargo del empleador)
+    const empleadoGrossAnual = grossAnualTotal - autonomoGrossAnual;
+    const costeEmpresaAnual = empleadoGrossAnual * (employerSSRate / 100);
+    const costeEmpresaTotalAnual = empleadoGrossAnual + costeEmpresaAnual;
 
     // Datos Gráfico Macro
     const chartSegments = [
@@ -203,13 +224,23 @@ export default function App() {
       minimoPersonal,
       chartSegments,
       hasAutonomo: autonomoGrossAnual > 0,
+      hasEmpleado: empleadoGrossAnual > 0,
+      empleadoGrossAnual,
+      costeEmpresaAnual,
+      costeEmpresaTotalAnual,
+      retencionIRPFAnual,
+      retencionIRPFMensual: retencionIRPFAnual / 12,
+      tipoRetencionEstimado,
       porcNeto: grossAnualTotal > 0 ? (netAnual / grossAnualTotal) * 100 : 0,
       porcSS: grossAnualTotal > 0 ? (ssTotalAnual / grossAnualTotal) * 100 : 0,
       porcIRPF: grossAnualTotal > 0 ? (cuotaIRPF_Total / grossAnualTotal) * 100 : 0
     };
-  }, [incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, lang, t]);
+  }, [incomes, incomePeriod, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, employerSSRate, lang, t]);
 
-  const addIncome = () => setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: 1000, period: 'mensual', expenses: 0 }]);
+  const addIncome = () => {
+    const defaultAmount = incomePeriod === 'anual' ? 12000 : 1000;
+    setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: defaultAmount, expenses: 0 }]);
+  };
 
   const updateIncome = (id: number, field: string, value: string) => {
     setIncomes(incomes.map(inc => {
@@ -222,26 +253,23 @@ export default function App() {
     }));
   };
 
-  const updateIncomePeriod = (id: number, newPeriod: 'mensual' | 'anual') => {
-    setIncomes(incomes.map(inc => {
-      if (inc.id !== id || inc.period === newPeriod) return inc;
-      const factor = newPeriod === 'anual' ? 12 : 1 / 12;
-      const toNum = (v: number | string) => (typeof v === 'number' ? v : Number(v) || 0);
-      const round2 = (n: number) => Math.round(n * 100) / 100;
-      return {
-        ...inc,
-        period: newPeriod,
-        amount: round2(toNum(inc.amount) * factor),
-        expenses: round2(toNum(inc.expenses) * factor),
-      };
-    }));
+  const changeIncomePeriod = (newPeriod: 'mensual' | 'anual') => {
+    if (newPeriod === incomePeriod) return;
+    const factor = newPeriod === 'anual' ? 12 : 1 / 12;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    setIncomes(prev => prev.map(inc => ({
+      ...inc,
+      amount: round2((Number(inc.amount) || 0) * factor),
+      expenses: round2((Number(inc.expenses) || 0) * factor),
+    })));
+    setIncomePeriod(newPeriod);
   };
 
   const removeIncome = (id: number) => setIncomes(incomes.filter(inc => inc.id !== id));
   const formatCurrency = (num: number) => new Intl.NumberFormat(lang === 'es' ? 'es-ES' : 'en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(num);
 
   const handleExport = () => {
-    const payload = { incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos };
+    const payload = { incomes, incomePeriod, employerSSRate, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -275,11 +303,12 @@ export default function App() {
           name: String(inc.name ?? ''),
           type: inc.type === 'autonomo' ? 'autonomo' : 'empleado',
           amount: Number(inc.amount) || 0,
-          period: inc.period === 'anual' ? 'anual' : 'mensual',
           expenses: Number(inc.expenses) || 0,
         }));
 
         setIncomes(parsedIncomes);
+        setIncomePeriod(data.incomePeriod === 'mensual' ? 'mensual' : 'anual');
+        if (typeof data.employerSSRate === 'number') setEmployerSSRate(data.employerSSRate);
         if (typeof data.autonomoQuota === 'number') setAutonomoQuota(data.autonomoQuota);
         if (typeof data.autoCalculateQuota === 'boolean') setAutoCalculateQuota(data.autoCalculateQuota);
         if (typeof data.ccaa === 'string' && data.ccaa in CCAA_RATES) setCcaa(data.ccaa);
@@ -452,45 +481,52 @@ export default function App() {
 
               {/* Panel Ingresos */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center mb-4 flex-wrap gap-2">
                   <h2 className="text-lg font-semibold flex items-center gap-2">
                     <DollarSign size={20} className="text-emerald-500"/> {t.ingresosTitle}
                   </h2>
-                  <button onClick={addIncome} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1.5 font-medium rounded-md flex items-center gap-1 hover:bg-indigo-100 transition-colors">
-                    <PlusCircle size={14} /> {t.anadir}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                      <button
+                        onClick={() => changeIncomePeriod('mensual')}
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${incomePeriod === 'mensual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {t.periodMensual}
+                      </button>
+                      <button
+                        onClick={() => changeIncomePeriod('anual')}
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${incomePeriod === 'anual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                      >
+                        {t.periodAnual}
+                      </button>
+                    </div>
+                    <button onClick={addIncome} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1.5 font-medium rounded-md flex items-center gap-1 hover:bg-indigo-100 transition-colors">
+                      <PlusCircle size={14} /> {t.anadir}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
                   {incomes.map((inc) => {
-                    const sliderMax = inc.period === 'anual' ? 150000 : 12000;
-                    const sliderStep = inc.period === 'anual' ? 500 : 50;
+                    const sliderMax = incomePeriod === 'anual' ? 150000 : 12000;
+                    const sliderStep = incomePeriod === 'anual' ? 500 : 50;
                     return (
-                    <div key={inc.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 relative group text-sm">
-                      <button onClick={() => removeIncome(inc.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">
-                        <Trash2 size={14} />
-                      </button>
-
-                      <div className="grid grid-cols-2 gap-2 mb-2">
-                        <input type="text" value={inc.name} onChange={(e) => updateIncome(inc.id, 'name', e.target.value)} className="w-full p-1.5 border border-slate-200 rounded bg-white" placeholder={t.nombrePlaceholder}/>
-                        <select value={inc.type} onChange={(e) => updateIncome(inc.id, 'type', e.target.value)} className="w-full p-1.5 border border-slate-200 rounded bg-white">
+                    <div key={inc.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <input type="text" value={inc.name} onChange={(e) => updateIncome(inc.id, 'name', e.target.value)} className="flex-1 min-w-0 p-1.5 border border-slate-200 rounded bg-white" placeholder={t.nombrePlaceholder}/>
+                        <select value={inc.type} onChange={(e) => updateIncome(inc.id, 'type', e.target.value)} className="w-32 shrink-0 p-1.5 border border-slate-200 rounded bg-white">
                           <option value="empleado">{t.cuentaAjena}</option>
                           <option value="autonomo">{t.freelance}</option>
                         </select>
+                        <button onClick={() => removeIncome(inc.id)} className="shrink-0 p-1 text-slate-400 hover:text-red-500">
+                          <Trash2 size={14} />
+                        </button>
                       </div>
 
                       <div className="mb-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-medium text-slate-500">{t.ingresoLabel}</label>
-                          <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200">
-                            <button type="button" onClick={() => updateIncomePeriod(inc.id, 'mensual')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.period === 'mensual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
-                              {t.periodMensual}
-                            </button>
-                            <button type="button" onClick={() => updateIncomePeriod(inc.id, 'anual')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.period === 'anual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
-                              {t.periodAnual}
-                            </button>
-                          </div>
-                        </div>
+                        <label className="text-xs font-medium text-slate-500">
+                          {t.ingresoLabel} ({incomePeriod === 'anual' ? t.periodAnual : t.periodMensual})
+                        </label>
                         <div className="flex items-center gap-2 mt-1">
                           <input type="range" min="0" max={sliderMax} step={sliderStep} value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="flex-1 accent-indigo-600"/>
                           <input type="number" value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
@@ -529,7 +565,10 @@ export default function App() {
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                   <div className="flex justify-between items-center mb-4">
                     <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2"><PieChart size={18} className="text-blue-500"/> {t.cuotaAutonomoTitle}</h2>
-                    <label className="flex items-center cursor-pointer">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <span className={`text-xs font-semibold ${autoCalculateQuota ? 'text-indigo-600' : 'text-slate-400'}`}>
+                        {autoCalculateQuota ? t.calculoAutomatico : t.calculoManual}
+                      </span>
                       <input type="checkbox" className="sr-only" checked={autoCalculateQuota} onChange={() => setAutoCalculateQuota(!autoCalculateQuota)}/>
                       <div className={`w-8 h-4 rounded-full transition-colors ${autoCalculateQuota ? 'bg-indigo-500' : 'bg-slate-300'} relative`}>
                         <div className={`w-3 h-3 bg-white rounded-full absolute top-0.5 left-0.5 transition-transform ${autoCalculateQuota ? 'translate-x-4' : ''}`}></div>
@@ -593,6 +632,50 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+
+              {/* Coste para la Empresa */}
+              {calculations.hasEmpleado && (
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</h2>
+                  <div className="flex items-center gap-2 mb-4">
+                    <input
+                      type="number"
+                      value={employerSSRate}
+                      onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
+                      className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                    <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
+                  </div>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
+                      <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-500">{t.ssEmpresaLabel}</span>
+                      <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
+                    </div>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                      <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
+                      <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
+                </div>
+              )}
+
+              {/* Retención IRPF Estimada */}
+              {calculations.hasEmpleado && (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                  <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</h3>
+                  <div className="mb-3">
+                    <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.retencionMensualLabel}</p>
+                    <p className="text-3xl font-black text-indigo-600">{formatCurrency(calculations.retencionIRPFMensual)}</p>
+                  </div>
+                  <p className="text-sm text-slate-600 mb-3">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
+                  <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
                 </div>
               )}
 

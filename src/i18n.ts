@@ -44,6 +44,20 @@ export interface Translations {
   puedesGanarExtra: (amount: string) => string;
   ilimitado: string;
   maxInfinito: string;
+  calculoAutomatico: string;
+  calculoManual: string;
+
+  costeEmpresaTitle: string;
+  tipoSSEmpresaLabel: string;
+  salarioBrutoEmpleadoLabel: string;
+  ssEmpresaLabel: string;
+  costeTotalEmpresaLabel: string;
+  costeEmpresaCaveat: string;
+
+  retencionTitle: string;
+  retencionMensualLabel: string;
+  tipoRetencionLabel: (pct: string) => string;
+  retencionCaveat: string;
 
   breakdownTitle: string;
   introduceIngresos: string;
@@ -109,6 +123,20 @@ export const translations: Record<Lang, Translations> = {
     puedesGanarExtra: (amount) => `Puedes ganar ${amount}/mes extra sin subir cuota.`,
     ilimitado: 'Ilimitado',
     maxInfinito: '+ Infinito',
+    calculoAutomatico: 'Cálculo automático',
+    calculoManual: 'Cálculo manual',
+
+    costeEmpresaTitle: 'Coste para la Empresa',
+    tipoSSEmpresaLabel: 'Tipo Seg. Social Empresa',
+    salarioBrutoEmpleadoLabel: 'Salario Bruto (Cuenta Ajena)',
+    ssEmpresaLabel: 'Seguridad Social Empresa',
+    costeTotalEmpresaLabel: 'Coste Total Empresa',
+    costeEmpresaCaveat: 'Estimación con un tipo medio combinado (contingencias comunes, desempleo, FOGASA, formación profesional y accidentes de trabajo). El tipo real varía según el tipo de contrato y la actividad (CNAE) de la empresa; ajústalo si conoces el tuyo.',
+
+    retencionTitle: '¿Cuánto IRPF debería retener mensualmente mi empresa?',
+    retencionMensualLabel: 'Retención mensual estimada',
+    tipoRetencionLabel: (pct) => `Tipo de retención estimado: ${pct}%`,
+    retencionCaveat: 'Estimación según el procedimiento general de retenciones (Art. 82-89 del Reglamento del IRPF), considerando solo los rendimientos del trabajo de esta empresa. La retención real de tu nómina puede variar ligeramente (gastos deducibles del trabajador, otros pagadores, fecha de inicio del contrato, etc.).',
 
     breakdownTitle: 'A dónde va cada Euro de tu Bruto Total',
     introduceIngresos: 'Introduce ingresos para ver el desglose',
@@ -174,6 +202,20 @@ export const translations: Record<Lang, Translations> = {
     puedesGanarExtra: (amount) => `You can earn ${amount}/month extra without a higher contribution.`,
     ilimitado: 'Unlimited',
     maxInfinito: '+ Unlimited',
+    calculoAutomatico: 'Automatic calculation',
+    calculoManual: 'Manual entry',
+
+    costeEmpresaTitle: 'Cost to the Company',
+    tipoSSEmpresaLabel: 'Employer Social Sec. Rate',
+    salarioBrutoEmpleadoLabel: 'Gross Salary (Employee)',
+    ssEmpresaLabel: 'Employer Social Security',
+    costeTotalEmpresaLabel: 'Total Company Cost',
+    costeEmpresaCaveat: 'Estimated using an average combined rate (common contingencies, unemployment, FOGASA, vocational training, and workplace accident insurance). The real rate varies by contract type and the company’s industry (CNAE) — adjust it if you know your own.',
+
+    retencionTitle: 'How much income tax should my employer withhold monthly?',
+    retencionMensualLabel: 'Estimated monthly withholding',
+    tipoRetencionLabel: (pct) => `Estimated withholding rate: ${pct}%`,
+    retencionCaveat: 'Estimated using the general withholding procedure (Spanish Income Tax Regulation, Art. 82-89), considering only the income earned from this employer. Your actual payslip withholding may differ slightly (worker-specific deductions, other payers, contract start date, etc.).',
 
     breakdownTitle: 'Where Every Euro of Your Gross Income Goes',
     introduceIngresos: 'Add income to see the breakdown',
