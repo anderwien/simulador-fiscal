@@ -82,53 +82,52 @@ const CCAA_RATES = {
   ]
 };
 
-const IRPF_COLORS = [
-  'bg-emerald-300', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-cyan-700',
-  'bg-sky-600', 'bg-blue-500', 'bg-blue-700', 'bg-indigo-500', 'bg-indigo-700',
-  'bg-violet-500', 'bg-violet-700', 'bg-purple-600', 'bg-fuchsia-600', 'bg-pink-600', 'bg-rose-700'
-];
+// El desglose se agrupa siempre por los tramos de la escala estatal (máx. 6), ver STATE_BRACKET_MAX.
+const IRPF_COLORS = ['bg-emerald-400', 'bg-teal-500', 'bg-cyan-600', 'bg-blue-600', 'bg-indigo-700', 'bg-violet-900'];
 
-// Por debajo de este % del bruto, un tramo de IRPF se fusiona con el vecino para no saturar
-// el gráfico con micro-tramos (las escalas reales combinadas tienen muchos puntos de corte).
-const MIN_IRPF_SEGMENT_SHARE = 1.5;
+// Puntos de corte de la escala general estatal (Art. 63.1 LIRPF) — son los mismos en toda España y
+// son los tramos que "todo el mundo conoce" (los que salen citados en prensa/internet: 19%, 24%, 30%,
+// 37%... para la mayoría de comunidades). Aunque la escala autonómica real tiene más puntos de corte
+// propios, agrupamos el desglose del gráfico por estos tramos estatales para que sea reconocible,
+// mostrando el tipo combinado medio real de cada tramo en vez de una media genérica.
+const STATE_BRACKET_MAX = [12450, 20200, 35200, 60000, 300000, Infinity];
 
-interface IrpfBracketSegment {
+interface IrpfFineBracket {
   rate: number;
   amount: number;
-  color: string;
   min: number;
-  porcentajeDelBruto: number;
 }
 
-/** Fusiona tramos de IRPF con un peso insignificante en el vecino, conservando el importe total exacto. */
-function mergeSmallIrpfBrackets(brackets: IrpfBracketSegment[], minSharePct: number): IrpfBracketSegment[] {
-  const merged: IrpfBracketSegment[] = [];
+interface IrpfGroupedBracket {
+  rate: number;
+  amount: number;
+  min: number;
+}
 
-  for (const b of brackets) {
-    if (merged.length > 0 && b.porcentajeDelBruto < minSharePct) {
-      const prev = merged[merged.length - 1];
-      merged[merged.length - 1] = {
-        ...prev,
-        rate: b.rate,
-        amount: prev.amount + b.amount,
-        porcentajeDelBruto: prev.porcentajeDelBruto + b.porcentajeDelBruto,
-      };
+/** Agrupa los tramos finos reales por el tramo estatal al que pertenece su base, calculando el tipo combinado efectivo de cada grupo. */
+function groupIrpfByStateBrackets(fine: IrpfFineBracket[]): IrpfGroupedBracket[] {
+  const groups: { amount: number; width: number; min: number }[] = [];
+  let lastStateIdx = -1;
+
+  fine.forEach(entry => {
+    const stateIdx = STATE_BRACKET_MAX.findIndex(max => entry.min < max);
+    const width = entry.rate > 0 ? entry.amount / (entry.rate / 100) : 0;
+
+    if (stateIdx !== lastStateIdx || groups.length === 0) {
+      groups.push({ amount: entry.amount, width, min: entry.min });
+      lastStateIdx = stateIdx;
     } else {
-      merged.push({ ...b });
+      const g = groups[groups.length - 1];
+      g.amount += entry.amount;
+      g.width += width;
     }
-  }
+  });
 
-  if (merged.length > 1 && merged[0].porcentajeDelBruto < minSharePct) {
-    const first = merged.shift() as IrpfBracketSegment;
-    merged[0] = {
-      ...merged[0],
-      min: first.min,
-      amount: merged[0].amount + first.amount,
-      porcentajeDelBruto: merged[0].porcentajeDelBruto + first.porcentajeDelBruto,
-    };
-  }
-
-  return merged;
+  return groups.map(g => ({
+    min: g.min,
+    amount: g.amount,
+    rate: g.width > 0 ? (g.amount / g.width) * 100 : 0,
+  }));
 }
 
 const DEDUCCION_SS_EMPLEADO = 0.0647; // ~6.47% cuota obrera
@@ -318,16 +317,16 @@ export default function App() {
     // 5. Cálculo IRPF progresivo (declaración completa: trabajo + autónomo)
     const tramosAplicables = CCAA_RATES[ccaa as keyof typeof CCAA_RATES];
     const { cuota: cuotaIRPF_Total, marginalRate, breakdown: irpfBreakdownRaw } = computeIrpfProgressive(baseImponible, minimoPersonal, tramosAplicables);
-    const irpfBreakdownFull = irpfBreakdownRaw.map(b => ({
-      rate: b.rate,
-      amount: b.amount,
-      color: IRPF_COLORS[b.tramoIndex],
-      min: b.min,
-      porcentajeDelBruto: grossAnualTotal > 0 ? (b.amount / grossAnualTotal) * 100 : 0
+    // La escala combinada real tiene muchos más puntos de corte que los tramos "de toda la vida"
+    // (19%, 24%, 30%, 37%...); se agrupan por esos tramos estatales conocidos, mostrando el tipo
+    // combinado medio real de cada uno, sin alterar el importe total de IRPF calculado.
+    const irpfBreakdown = groupIrpfByStateBrackets(irpfBreakdownRaw).map((g, i) => ({
+      rate: g.rate,
+      amount: g.amount,
+      color: IRPF_COLORS[i],
+      min: g.min,
+      porcentajeDelBruto: grossAnualTotal > 0 ? (g.amount / grossAnualTotal) * 100 : 0
     }));
-    // Las escalas combinadas reales tienen muchos puntos de corte; se fusionan los tramos
-    // irrelevantes para el gráfico, sin alterar el cálculo del IRPF total (irpfBreakdownFull).
-    const irpfBreakdown = mergeSmallIrpfBrackets(irpfBreakdownFull, MIN_IRPF_SEGMENT_SHARE);
 
     // 5b. Retención IRPF estimada que debería aplicar el empleador (solo rendimientos del trabajo)
     const { cuota: retencionIRPFAnual } = computeIrpfProgressive(Math.max(0, rendimientosTrabajo), minimoPersonal, tramosAplicables);
