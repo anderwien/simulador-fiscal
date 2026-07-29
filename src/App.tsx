@@ -1,5 +1,8 @@
-import { useState, useMemo } from 'react';
-import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload } from 'lucide-react';
+import { translations, type Lang } from './i18n';
+import BreakdownTreemap from './components/BreakdownTreemap';
 
 // --- CONSTANTES FISCALES ---
 // Escala Estatal + Autonómica Promedio
@@ -34,14 +37,42 @@ const TRAMOS_AUTONOMO = [
   { id: 15, min: 6000.01, max: Infinity, cuota: 605.71 }
 ];
 
+interface Income {
+  id: number;
+  name: string;
+  type: string;
+  amount: number | string;
+  period: string;
+  expenses: number | string;
+}
+
+interface ImportedIncome {
+  id?: number;
+  name?: string;
+  type?: string;
+  amount?: number;
+  period?: string;
+  expenses?: number;
+}
+
+interface ImportedData {
+  incomes?: ImportedIncome[];
+  autonomoQuota?: number;
+  autoCalculateQuota?: boolean;
+  ccaa?: string;
+  estadoCivil?: string;
+  hijos?: number;
+}
+
 export default function App() {
+  const [lang, setLang] = useState<Lang>('es');
+  const t = translations[lang];
+
   // Estado Incomes y Cuota
-  const [incomes, setIncomes] = useState([
-    { id: 1, name: 'Trabajo Profesor', type: 'empleado', amount: 1500, period: 'mensual', expenses: 0 },
-    { id: 2, name: 'Trabajo Artista', type: 'empleado', amount: 750, period: 'mensual', expenses: 0 },
-    { id: 3, name: 'Freelance Chipre', type: 'autonomo', amount: 3335, period: 'mensual', expenses: 0 }
+  const [incomes, setIncomes] = useState<Income[]>([
+    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 25000, period: 'anual', expenses: 0 }
   ]);
-  const [autonomoQuota, setAutonomoQuota] = useState(478.79); 
+  const [autonomoQuota, setAutonomoQuota] = useState(478.79);
   const [autoCalculateQuota, setAutoCalculateQuota] = useState(true);
   const [showOptimization, setShowOptimization] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
@@ -50,6 +81,10 @@ export default function App() {
   const [ccaa, setCcaa] = useState('Comunidad Valenciana');
   const [estadoCivil, setEstadoCivil] = useState('soltero');
   const [hijos, setHijos] = useState(0);
+
+  // Import/Export
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importError, setImportError] = useState<string | null>(null);
 
   // --- LÓGICA DE CÁLCULO ---
   const calculations = useMemo(() => {
@@ -77,11 +112,11 @@ export default function App() {
     });
 
     // 1. Autónomo: Calcular Rendimiento para Tramos SS (-7% ded. difícil justificación)
-    const rendimientoNetoSSMensual = autonomoGrossAnual > 0 
-      ? ((autonomoGrossAnual - autonomoExpensesAnual) / 12) * 0.93 
+    const rendimientoNetoSSMensual = autonomoGrossAnual > 0
+      ? ((autonomoGrossAnual - autonomoExpensesAnual) / 12) * 0.93
       : 0;
-    
-    const currentTramo = TRAMOS_AUTONOMO.find(t => rendimientoNetoSSMensual >= t.min && rendimientoNetoSSMensual <= t.max) || TRAMOS_AUTONOMO[0];
+
+    const currentTramo = TRAMOS_AUTONOMO.find(tr => rendimientoNetoSSMensual >= tr.min && rendimientoNetoSSMensual <= tr.max) || TRAMOS_AUTONOMO[0];
     const safeAutonomoQuota = Number(autonomoQuota) || 0;
     const cuotaFinal = autoCalculateQuota ? currentTramo.cuota : safeAutonomoQuota;
     const ssAutonomoAnual = autonomoGrossAnual > 0 ? cuotaFinal * 12 : 0;
@@ -96,7 +131,7 @@ export default function App() {
     }
 
     // 3. Mínimo Personal y Familiar
-    let minimoPersonal = 5550; 
+    let minimoPersonal = 5550;
     if (hijos >= 1) minimoPersonal += 2400;
     if (hijos >= 2) minimoPersonal += 2700;
     if (hijos >= 3) minimoPersonal += 4000;
@@ -112,7 +147,7 @@ export default function App() {
     let irpfBreakdown: { rate: number; amount: number; color: string; porcentajeDelBruto: number }[] = [];
     let cuotaIRPF_Total = 0;
     let marginalRate = 0;
-    
+
     let baseRestante = baseImponible;
     let minimoRestante = minimoPersonal;
     let limiteAnterior = 0;
@@ -121,7 +156,7 @@ export default function App() {
       const anchoTramo = tramo.max - limiteAnterior;
       const amountBaseInTramo = Math.max(0, Math.min(baseRestante, anchoTramo));
       const amountMinimoInTramo = Math.max(0, Math.min(minimoRestante, anchoTramo));
-      
+
       const taxInTramo = (amountBaseInTramo * tramo.rate) - (amountMinimoInTramo * tramo.rate);
 
       if (amountBaseInTramo > 0) {
@@ -146,10 +181,10 @@ export default function App() {
 
     // Datos Gráfico Macro
     const chartSegments = [
-      { id: 'gastos', label: 'Gastos Actividad', amount: autonomoExpensesAnual, color: 'bg-slate-500', porc: (autonomoExpensesAnual/grossAnualTotal)*100 },
-      { id: 'ss', label: 'Seguridad Social', amount: ssTotalAnual, color: 'bg-amber-500', porc: (ssTotalAnual/grossAnualTotal)*100 },
-      ...irpfBreakdown.map(t => ({ id: `irpf_${t.rate}`, label: `IRPF (${t.rate}%)`, amount: t.amount, color: t.color, porc: t.porcentajeDelBruto })),
-      { id: 'neto', label: 'Neto Limpio', amount: netAnual, color: 'bg-indigo-500', porc: (netAnual/grossAnualTotal)*100 }
+      { id: 'gastos', label: t.gastosActividad, amount: autonomoExpensesAnual, color: 'bg-slate-500', porc: (autonomoExpensesAnual / grossAnualTotal) * 100 },
+      { id: 'ss', label: t.seguridadSocialLabel, amount: ssTotalAnual, color: 'bg-amber-500', porc: (ssTotalAnual / grossAnualTotal) * 100 },
+      ...irpfBreakdown.map((tr, i) => ({ id: `irpf_${i}`, label: t.irpfPct(tr.rate.toFixed(0)), amount: tr.amount, color: tr.color, porc: tr.porcentajeDelBruto })),
+      { id: 'neto', label: t.netoLimpio, amount: netAnual, color: 'bg-indigo-500', porc: (netAnual / grossAnualTotal) * 100 }
     ];
 
     return {
@@ -172,14 +207,14 @@ export default function App() {
       porcSS: grossAnualTotal > 0 ? (ssTotalAnual / grossAnualTotal) * 100 : 0,
       porcIRPF: grossAnualTotal > 0 ? (cuotaIRPF_Total / grossAnualTotal) * 100 : 0
     };
-  }, [incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos]);
+  }, [incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, lang, t]);
 
-  const addIncome = () => setIncomes([...incomes, { id: Date.now(), name: 'Nuevo Ingreso', type: 'empleado', amount: 1000, period: 'mensual', expenses: 0 }]);
-  
+  const addIncome = () => setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: 1000, period: 'mensual', expenses: 0 }]);
+
   const updateIncome = (id: number, field: string, value: string) => {
     setIncomes(incomes.map(inc => {
       if (inc.id !== id) return inc;
-      if (field === 'name' || field === 'type' || field === 'period') return { ...inc, [field]: value };
+      if (field === 'name' || field === 'type') return { ...inc, [field]: value };
 
       let parsedValue: number | string = value === '' ? '' : Number(value);
       if (typeof parsedValue === 'number' && Number.isNaN(parsedValue)) parsedValue = 0;
@@ -187,8 +222,76 @@ export default function App() {
     }));
   };
 
+  const updateIncomePeriod = (id: number, newPeriod: 'mensual' | 'anual') => {
+    setIncomes(incomes.map(inc => {
+      if (inc.id !== id || inc.period === newPeriod) return inc;
+      const factor = newPeriod === 'anual' ? 12 : 1 / 12;
+      const toNum = (v: number | string) => (typeof v === 'number' ? v : Number(v) || 0);
+      const round2 = (n: number) => Math.round(n * 100) / 100;
+      return {
+        ...inc,
+        period: newPeriod,
+        amount: round2(toNum(inc.amount) * factor),
+        expenses: round2(toNum(inc.expenses) * factor),
+      };
+    }));
+  };
+
   const removeIncome = (id: number) => setIncomes(incomes.filter(inc => inc.id !== id));
-  const formatCurrency = (num: number) => new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(num);
+  const formatCurrency = (num: number) => new Intl.NumberFormat(lang === 'es' ? 'es-ES' : 'en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(num);
+
+  const handleExport = () => {
+    const payload = { incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const today = new Date().toISOString().slice(0, 10);
+    a.href = url;
+    a.download = `simulador-fiscal-${today}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportClick = () => {
+    setImportError(null);
+    fileInputRef.current?.click();
+  };
+
+  const handleImportFile = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(String(reader.result)) as ImportedData;
+        if (!Array.isArray(data.incomes)) throw new Error('invalid incomes');
+
+        const parsedIncomes: Income[] = data.incomes.map((inc, i) => ({
+          id: Number(inc.id) || Date.now() + i,
+          name: String(inc.name ?? ''),
+          type: inc.type === 'autonomo' ? 'autonomo' : 'empleado',
+          amount: Number(inc.amount) || 0,
+          period: inc.period === 'anual' ? 'anual' : 'mensual',
+          expenses: Number(inc.expenses) || 0,
+        }));
+
+        setIncomes(parsedIncomes);
+        if (typeof data.autonomoQuota === 'number') setAutonomoQuota(data.autonomoQuota);
+        if (typeof data.autoCalculateQuota === 'boolean') setAutoCalculateQuota(data.autoCalculateQuota);
+        if (typeof data.ccaa === 'string' && data.ccaa in CCAA_RATES) setCcaa(data.ccaa);
+        if (typeof data.estadoCivil === 'string') setEstadoCivil(data.estadoCivil);
+        if (typeof data.hijos === 'number') setHijos(data.hijos);
+        setImportError(null);
+      } catch {
+        setImportError(t.importError);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   const distanceToNextTramo = calculations.currentTramo.max - calculations.rendimientoNetoSSMensual;
   const distanceToPrevTramo = calculations.rendimientoNetoSSMensual - calculations.currentTramo.min;
@@ -201,65 +304,98 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans flex flex-col relative">
-      
+
       {/* STICKY HEADER SUMMARY */}
       <div className="sticky top-0 z-50 bg-white/95 backdrop-blur-md shadow-sm border-b border-slate-200 py-3 px-4 md:px-8">
         <div className="max-w-7xl mx-auto">
-          {/* Header Superior: Titulillo y Toggle */}
-          <div className="flex justify-between items-center mb-3">
+          {/* Header Superior: Titulillo y Controles */}
+          <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
              <div className="flex items-center gap-1.5 text-indigo-600">
                <Target size={16} />
-               <span className="text-xs font-bold uppercase tracking-widest">Simulador Fiscal</span>
+               <span className="text-xs font-bold uppercase tracking-widest">{t.appTitle}</span>
              </div>
-             
-             {/* Toggle Anual/Mensual */}
-             <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
-                <button 
-                  onClick={() => setIsMonthlyView(false)}
-                  className={`text-xs font-semibold px-3 py-1 rounded-md transition-colors ${!isMonthlyView ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Anual
+
+             <div className="flex items-center gap-2 flex-wrap">
+                {/* Toggle Idioma */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                  <button
+                    onClick={() => setLang('es')}
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${lang === 'es' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    ES
+                  </button>
+                  <button
+                    onClick={() => setLang('en')}
+                    className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${lang === 'en' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    EN
+                  </button>
+                </div>
+
+                {/* Import / Export */}
+                <button onClick={handleExport} title={t.exportar} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors">
+                  <Download size={14} /> {t.exportar}
                 </button>
-                <button 
-                  onClick={() => setIsMonthlyView(true)}
-                  className={`text-xs font-semibold px-3 py-1 rounded-md transition-colors ${isMonthlyView ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  Mensual
+                <button onClick={handleImportClick} title={t.importar} className="flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors">
+                  <Upload size={14} /> {t.importar}
                 </button>
+                <input ref={fileInputRef} type="file" accept="application/json" className="hidden" onChange={handleImportFile} />
+
+                {/* Toggle Anual/Mensual */}
+                <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200">
+                   <button
+                     onClick={() => setIsMonthlyView(false)}
+                     className={`text-xs font-semibold px-3 py-1 rounded-md transition-colors ${!isMonthlyView ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                   >
+                     {t.toggleAnual}
+                   </button>
+                   <button
+                     onClick={() => setIsMonthlyView(true)}
+                     className={`text-xs font-semibold px-3 py-1 rounded-md transition-colors ${isMonthlyView ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500 hover:text-slate-700'}`}
+                   >
+                     {t.toggleMensual}
+                   </button>
+                </div>
              </div>
           </div>
 
+          {importError && (
+            <div className="mb-3 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+              {importError}
+            </div>
+          )}
+
           {/* Fila de Métricas */}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            
+
             {/* Izquierda: Bruto y Neto */}
             <div className="flex items-center gap-4 md:gap-6 w-full md:w-auto justify-between md:justify-start">
               <div>
-                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">Bruto</p>
+                <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-0.5">{t.bruto}</p>
                 <p className="text-2xl md:text-3xl font-black text-slate-800 leading-none">{formatCurrency(displayGross)}</p>
               </div>
               <div className="h-10 w-px bg-slate-200 hidden md:block"></div>
               <div className="text-right md:text-left">
                 <p className="text-xs text-indigo-600 font-bold uppercase tracking-wider mb-0.5 flex items-center justify-end md:justify-start gap-2">
-                  Neto
+                  {t.neto}
                   {calculations.grossAnualTotal > 0 && <span className="bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded text-[10px]">{calculations.porcNeto.toFixed(1)}%</span>}
                 </p>
                 <p className="text-3xl md:text-4xl font-black text-indigo-600 leading-none">{formatCurrency(displayNet)}</p>
               </div>
             </div>
-            
+
             {/* Derecha: SS e IRPF */}
             <div className="flex gap-6 w-full md:w-auto justify-between md:justify-end border-t border-slate-100 md:border-0 pt-3 md:pt-0">
               <div>
                 <span className="text-slate-500 flex items-center gap-1 text-xs font-semibold uppercase">
-                  Seg. Social
+                  {t.segSocial}
                   {calculations.grossAnualTotal > 0 && <span className="text-amber-500">({calculations.porcSS.toFixed(1)}%)</span>}
                 </span>
                 <span className="font-bold text-amber-600 text-lg leading-none">-{formatCurrency(displaySS)}</span>
               </div>
               <div className="text-right">
                 <span className="text-slate-500 flex items-center justify-end gap-1 text-xs font-semibold uppercase">
-                  IRPF Medio
+                  {t.irpfMedio}
                   {calculations.grossAnualTotal > 0 && <span className="text-rose-500">({calculations.porcIRPF.toFixed(1)}%)</span>}
                 </span>
                 <span className="font-bold text-rose-500 text-lg leading-none">-{formatCurrency(displayIRPF)}</span>
@@ -271,45 +407,45 @@ export default function App() {
 
       <div className="p-4 md:p-8 flex-grow w-full">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
             {/* COLUMNA IZQUIERDA: INPUTS */}
-            <div className="lg:col-span-5 space-y-4">
-              
+            <div className="space-y-4">
+
               {/* Panel Perfil Personal */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-lg font-semibold flex items-center gap-2 mb-4 text-slate-800">
-                  <Users size={20} className="text-indigo-500"/> Perfil Personal (IRPF)
+                  <Users size={20} className="text-indigo-500"/> {t.perfilPersonalTitle}
                 </h2>
                 <div className="space-y-3 text-sm">
                   <div>
-                    <label className="font-medium text-slate-500 mb-1 flex items-center gap-1"><MapPin size={14}/> Com. Autónoma</label>
+                    <label className="font-medium text-slate-500 mb-1 flex items-center gap-1"><MapPin size={14}/> {t.comAutonoma}</label>
                     <select value={ccaa} onChange={(e) => setCcaa(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
                       {Object.keys(CCAA_RATES).map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="font-medium text-slate-500 mb-1 block">Estado Civil</label>
+                      <label className="font-medium text-slate-500 mb-1 block">{t.estadoCivil}</label>
                       <select value={estadoCivil} onChange={(e) => setEstadoCivil(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="soltero">Soltero/a</option>
-                        <option value="casado_indiv">Casado (Indiv)</option>
-                        <option value="casado_conjunta">Casado (Conjunta)</option>
+                        <option value="soltero">{t.estadoCivilOptions.soltero}</option>
+                        <option value="casado_indiv">{t.estadoCivilOptions.casado_indiv}</option>
+                        <option value="casado_conjunta">{t.estadoCivilOptions.casado_conjunta}</option>
                       </select>
                     </div>
                     <div>
-                      <label className="font-medium text-slate-500 mb-1 block">Hijos a cargo</label>
+                      <label className="font-medium text-slate-500 mb-1 block">{t.hijosACargo}</label>
                       <select value={hijos} onChange={(e) => setHijos(Number(e.target.value))} className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500">
-                        <option value="0">Ninguno</option>
+                        <option value="0">{t.hijosOptions.ninguno}</option>
                         <option value="1">1</option>
                         <option value="2">2</option>
                         <option value="3">3</option>
-                        <option value="4">4 o más</option>
+                        <option value="4">{t.hijosOptions.masDe4}</option>
                       </select>
                     </div>
                   </div>
                   <div className="mt-2 text-xs text-indigo-600 font-medium p-2 bg-indigo-50 rounded-lg border border-indigo-100">
-                    Mínimo Personal exento aplicado: {formatCurrency(calculations.minimoPersonal)}
+                    {t.minimoPersonalExento(formatCurrency(calculations.minimoPersonal))}
                   </div>
                 </div>
               </div>
@@ -318,55 +454,81 @@ export default function App() {
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                 <div className="flex justify-between items-center mb-4">
                   <h2 className="text-lg font-semibold flex items-center gap-2">
-                    <DollarSign size={20} className="text-emerald-500"/> Ingresos
+                    <DollarSign size={20} className="text-emerald-500"/> {t.ingresosTitle}
                   </h2>
                   <button onClick={addIncome} className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1.5 font-medium rounded-md flex items-center gap-1 hover:bg-indigo-100 transition-colors">
-                    <PlusCircle size={14} /> Añadir
+                    <PlusCircle size={14} /> {t.anadir}
                   </button>
                 </div>
 
                 <div className="space-y-4">
-                  {incomes.map((inc) => (
+                  {incomes.map((inc) => {
+                    const sliderMax = inc.period === 'anual' ? 150000 : 12000;
+                    const sliderStep = inc.period === 'anual' ? 500 : 50;
+                    return (
                     <div key={inc.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 relative group text-sm">
                       <button onClick={() => removeIncome(inc.id)} className="absolute top-2 right-2 text-slate-400 hover:text-red-500">
                         <Trash2 size={14} />
                       </button>
-                      
+
                       <div className="grid grid-cols-2 gap-2 mb-2">
-                        <input type="text" value={inc.name} onChange={(e) => updateIncome(inc.id, 'name', e.target.value)} className="w-full p-1.5 border border-slate-200 rounded bg-white" placeholder="Nombre"/>
+                        <input type="text" value={inc.name} onChange={(e) => updateIncome(inc.id, 'name', e.target.value)} className="w-full p-1.5 border border-slate-200 rounded bg-white" placeholder={t.nombrePlaceholder}/>
                         <select value={inc.type} onChange={(e) => updateIncome(inc.id, 'type', e.target.value)} className="w-full p-1.5 border border-slate-200 rounded bg-white">
-                          <option value="empleado">Cuenta Ajena</option>
-                          <option value="autonomo">Freelance</option>
+                          <option value="empleado">{t.cuentaAjena}</option>
+                          <option value="autonomo">{t.freelance}</option>
                         </select>
                       </div>
 
                       <div className="mb-2">
-                        <label className="text-xs font-medium text-slate-500">Ingreso {inc.period}</label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-medium text-slate-500">{t.ingresoLabel}</label>
+                          <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200">
+                            <button type="button" onClick={() => updateIncomePeriod(inc.id, 'mensual')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.period === 'mensual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
+                              {t.periodMensual}
+                            </button>
+                            <button type="button" onClick={() => updateIncomePeriod(inc.id, 'anual')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.period === 'anual' ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
+                              {t.periodAnual}
+                            </button>
+                          </div>
+                        </div>
                         <div className="flex items-center gap-2 mt-1">
-                          <input type="range" min="0" max={10000} step="50" value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="flex-1 accent-indigo-600"/>
-                          <input type="number" value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="w-20 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
+                          <input type="range" min="0" max={sliderMax} step={sliderStep} value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="flex-1 accent-indigo-600"/>
+                          <input type="number" value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
                         </div>
                       </div>
 
                       {inc.type === 'autonomo' && (
                         <div className="pt-2 border-t border-slate-200">
-                          <label className="text-xs font-medium text-orange-600">Gastos Deducibles {inc.period}</label>
+                          <label className="text-xs font-medium text-orange-600">{t.gastosDeduciblesLabel}</label>
                           <div className="flex items-center gap-2 mt-1">
                             <input type="range" min="0" max={Number(inc.amount) || 1000} step="10" value={inc.expenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="flex-1 accent-orange-500"/>
-                            <input type="number" value={inc.expenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="w-20 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
+                            <input type="number" value={inc.expenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
                           </div>
                         </div>
                       )}
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
+              </div>
+            </div>
+
+            {/* COLUMNA DERECHA: RESULTADOS */}
+            <div className="space-y-6">
+
+              {/* GRÁFICO TOTAL DEL BRUTO */}
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                 <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
+                  <BarChart size={20} className="text-blue-500"/> {t.breakdownTitle}
+                </h3>
+                <BreakdownTreemap segments={calculations.chartSegments} formatCurrency={formatCurrency} emptyMessage={t.introduceIngresos} />
               </div>
 
               {/* Panel Cuota & Optimización */}
               {calculations.hasAutonomo && (
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                   <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2"><PieChart size={18} className="text-blue-500"/> Cuota Autónomo</h2>
+                    <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2"><PieChart size={18} className="text-blue-500"/> {t.cuotaAutonomoTitle}</h2>
                     <label className="flex items-center cursor-pointer">
                       <input type="checkbox" className="sr-only" checked={autoCalculateQuota} onChange={() => setAutoCalculateQuota(!autoCalculateQuota)}/>
                       <div className={`w-8 h-4 rounded-full transition-colors ${autoCalculateQuota ? 'bg-indigo-500' : 'bg-slate-300'} relative`}>
@@ -380,21 +542,21 @@ export default function App() {
                       const numVal = val === '' ? 0 : Number(val);
                       setAutonomoQuota(Number.isNaN(numVal) ? 0 : numVal);
                     }} disabled={autoCalculateQuota} className={`w-28 p-2 pl-3 border border-slate-200 rounded-md font-bold text-lg outline-none focus:ring-2 focus:ring-indigo-500 ${autoCalculateQuota ? 'bg-slate-50 text-slate-500' : 'bg-white text-slate-800'}`}/>
-                    <span className="text-sm text-slate-500">€/mes a Seg. Social</span>
+                    <span className="text-sm text-slate-500">{t.eurMesSegSocial}</span>
                   </div>
                   {autoCalculateQuota && (
                      <p className="text-xs text-indigo-500 font-medium mb-4 flex items-center gap-1">
-                       <Calculator size={12} /> Calculado según Tramo {calculations.currentTramo.id}
+                       <Calculator size={12} /> {t.calculadoSegunTramo(calculations.currentTramo.id)}
                      </p>
                   )}
 
                   {/* SECCIÓN DESPLEGABLE DE OPTIMIZACIÓN */}
                   <div className="border-t border-slate-100 pt-3 mt-4">
-                    <button 
+                    <button
                       onClick={() => setShowOptimization(!showOptimization)}
                       className="w-full flex items-center justify-between text-sm font-semibold text-slate-600 hover:text-indigo-600 transition-colors"
                     >
-                      <span className="flex items-center gap-2"><TrendingUp size={16}/> Optimización de cuota</span>
+                      <span className="flex items-center gap-2"><TrendingUp size={16}/> {t.optimizacionCuota}</span>
                       {showOptimization ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
                     </button>
 
@@ -402,8 +564,8 @@ export default function App() {
                       <div className="mt-4 space-y-4">
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                           <p className="text-sm text-slate-600 mb-4">
-                            Rendimiento computable: <strong>{formatCurrency(calculations.rendimientoNetoSSMensual)}/mes</strong>. 
-                            Estás en el <strong>Tramo {calculations.currentTramo.id}</strong> ({formatCurrency(calculations.currentTramo.min)} - {calculations.currentTramo.max === Infinity ? 'Max' : formatCurrency(calculations.currentTramo.max)}).
+                            {t.rendimientoComputable(formatCurrency(calculations.rendimientoNetoSSMensual))}{' '}
+                            {t.estasEnTramo(calculations.currentTramo.id, formatCurrency(calculations.currentTramo.min), calculations.currentTramo.max === Infinity ? 'Max' : formatCurrency(calculations.currentTramo.max))}
                           </p>
 
                           <div className="relative h-6 bg-slate-200 rounded-full overflow-hidden mb-2">
@@ -411,21 +573,21 @@ export default function App() {
                                   style={{ width: calculations.currentTramo.max !== Infinity ? `${((calculations.rendimientoNetoSSMensual - calculations.currentTramo.min) / (calculations.currentTramo.max - calculations.currentTramo.min)) * 100}%` : '50%' }}
                              />
                           </div>
-                          
+
                           <div className="flex justify-between text-xs text-slate-400 font-bold">
                             <span>{formatCurrency(calculations.currentTramo.min)}</span>
-                            <span>{calculations.currentTramo.max === Infinity ? '+ Infinito' : formatCurrency(calculations.currentTramo.max)}</span>
+                            <span>{calculations.currentTramo.max === Infinity ? t.maxInfinito : formatCurrency(calculations.currentTramo.max)}</span>
                           </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                           <div className="bg-emerald-50 p-3 rounded-xl border border-emerald-100">
-                            <p className="text-xs text-emerald-600 font-bold mb-1 flex items-center gap-1"><ChevronDown size={14}/> Bajar de tramo</p>
-                            <p className="text-xs text-slate-600 leading-tight">Justifica <strong>{formatCurrency(distanceToPrevTramo)}/mes</strong> extra en gastos.</p>
+                            <p className="text-xs text-emerald-600 font-bold mb-1 flex items-center gap-1"><ChevronDown size={14}/> {t.bajarDeTramo}</p>
+                            <p className="text-xs text-slate-600 leading-tight">{t.justificaExtra(formatCurrency(distanceToPrevTramo))}</p>
                           </div>
                           <div className="bg-amber-50 p-3 rounded-xl border border-amber-100">
-                            <p className="text-xs text-amber-600 font-bold mb-1 flex items-center gap-1"><ChevronUp size={14}/> Margen ganancia</p>
-                            <p className="text-xs text-slate-600 leading-tight">Puedes ganar <strong>{calculations.currentTramo.max === Infinity ? 'Ilimitado' : formatCurrency(distanceToNextTramo)}/mes</strong> extra sin subir cuota.</p>
+                            <p className="text-xs text-amber-600 font-bold mb-1 flex items-center gap-1"><ChevronUp size={14}/> {t.margenGanancia}</p>
+                            <p className="text-xs text-slate-600 leading-tight">{calculations.currentTramo.max === Infinity ? t.ilimitado : t.puedesGanarExtra(formatCurrency(distanceToNextTramo))}</p>
                           </div>
                         </div>
                       </div>
@@ -433,65 +595,22 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </div>
-
-            {/* COLUMNA DERECHA: RESULTADOS */}
-            <div className="lg:col-span-7 space-y-6">
-              
-              {/* GRÁFICO TOTAL DEL BRUTO */}
-              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <BarChart size={20} className="text-blue-500"/> A dónde va cada Euro de tu Bruto Total
-                </h3>
-                
-                {calculations.grossAnualTotal > 0 ? (
-                  <>
-                    <div className="w-full h-12 flex rounded-xl overflow-hidden border border-slate-200 shadow-inner mb-6">
-                      {calculations.chartSegments.map((seg, i) => seg.amount > 0 && (
-                        <div key={i} className={`h-full ${seg.color} transition-all duration-500 flex items-center justify-center border-r border-white/20 last:border-0 hover:brightness-110 cursor-default group relative`} style={{ width: `${seg.porc}%` }}>
-                          {seg.porc > 8 && <span className="text-xs font-bold text-white/90 truncate px-1">{seg.label}</span>}
-                          {/* Tooltip on hover */}
-                          <div className="absolute -top-10 scale-0 group-hover:scale-100 transition-transform bg-slate-800 text-white text-xs py-1 px-2 rounded z-10 whitespace-nowrap">
-                            {seg.label}: {formatCurrency(seg.amount)} ({(seg.porc).toFixed(1)}%)
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {calculations.chartSegments.filter(s => s.amount > 0).map((seg, i) => (
-                        <div key={i} className="flex items-center gap-2 text-sm">
-                          <div className={`w-3 h-3 rounded-full ${seg.color} shrink-0`}></div>
-                          <div className="overflow-hidden">
-                            <p className="font-medium text-slate-700 truncate text-xs">{seg.label}</p>
-                            <p className="text-xs text-slate-500 font-semibold">{formatCurrency(seg.amount)}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center p-6 text-slate-400 bg-slate-50 rounded-xl border border-slate-100">Introduce ingresos para ver el desglose</div>
-                )}
-              </div>
 
               {/* Insights */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2"><Info size={18} className="text-blue-500"/> Información Técnica</h3>
-                 
+                 <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</h3>
+
                  <div className="space-y-4">
                     <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
                       <AlertCircle className="shrink-0 text-slate-400" size={18} />
-                      <p>
-                        Calculado restando automáticamente el <strong>5% de gastos de difícil justificación</strong> sobre rendimientos de IRPF (tope 2.000€) y el <strong>7%</strong> para el cómputo del tramo de la Seguridad Social.
-                      </p>
+                      <p>{t.infoTecnicaText}</p>
                     </div>
-                    
+
                     <div className="flex gap-3 text-sm text-indigo-700 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
                       <Target className="shrink-0 text-indigo-500" size={18} />
                       <div>
-                        <p className="font-bold mb-1">Tipo Marginal Actual: {(calculations.marginalRate * 100).toFixed(1)}%</p>
-                        <p className="text-indigo-600">De cada 100€ extras que ganes ahora, Hacienda retendrá {(calculations.marginalRate * 100).toFixed(1)}€. Y por cada 100€ que logres deducir, te ahorrarás esa misma cantidad en tu Declaración.</p>
+                        <p className="font-bold mb-1">{t.tipoMarginalActual((calculations.marginalRate * 100).toFixed(1))}</p>
+                        <p className="text-indigo-600">{t.tipoMarginalText((calculations.marginalRate * 100).toFixed(1))}</p>
                       </div>
                     </div>
                  </div>
@@ -499,10 +618,10 @@ export default function App() {
 
             </div>
           </div>
-          
+
           {/* FOOTER */}
           <footer className="mt-8 text-center text-xs font-medium text-slate-400 py-6 border-t border-slate-200">
-            developed by anderwien
+            {t.footer}
           </footer>
 
         </div>
