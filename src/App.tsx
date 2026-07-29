@@ -117,6 +117,9 @@ export default function App() {
   const [autonomoQuota, setAutonomoQuota] = useState(478.79);
   const [autoCalculateQuota, setAutoCalculateQuota] = useState(true);
   const [showOptimization, setShowOptimization] = useState(false);
+  const [showInfoGastos, setShowInfoGastos] = useState(false);
+  const [showInfoPagas14, setShowInfoPagas14] = useState(false);
+  const [showInfoMarginal, setShowInfoMarginal] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
   const [employerSSRate, setEmployerSSRate] = useState(31);
   const [includeEmployerCost, setIncludeEmployerCost] = useState(false);
@@ -553,9 +556,8 @@ export default function App() {
                         </button>
                       </div>
 
-                      {inc.type === 'empleado' && (
+                      {inc.type === 'empleado' && incomePeriod === 'mensual' && (
                         <div className="flex items-center gap-2 mb-2">
-                          <label className="text-xs font-medium text-slate-500">{t.pagasLabel}</label>
                           <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200">
                             <button type="button" onClick={() => updateIncome(inc.id, 'pagas', '12')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 12 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
                               {t.pagas12}
@@ -622,27 +624,42 @@ export default function App() {
               {/* Información Técnica */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</h2>
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {calculations.hasAutonomo && (
-                    <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <AlertCircle className="shrink-0 text-slate-400" size={18} />
-                      <p>{t.infoTecnicaText}</p>
+                    <div className="bg-slate-50 rounded-xl border border-slate-100">
+                      <button
+                        onClick={() => setShowInfoGastos(!showInfoGastos)}
+                        className="w-full flex items-center justify-between gap-2 p-3 text-sm font-semibold text-slate-700"
+                      >
+                        <span className="flex items-center gap-2"><AlertCircle className="shrink-0 text-slate-400" size={16} /> {t.infoGastosTitle}</span>
+                        {showInfoGastos ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                      </button>
+                      {showInfoGastos && <p className="px-3 pb-3 text-sm text-slate-600">{t.infoTecnicaText}</p>}
                     </div>
                   )}
 
                   {incomes.some(inc => inc.type === 'empleado' && inc.pagas === 14) && (
-                    <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
-                      <AlertCircle className="shrink-0 text-slate-400" size={18} />
-                      <p>{t.pagas14InfoText}</p>
+                    <div className="bg-slate-50 rounded-xl border border-slate-100">
+                      <button
+                        onClick={() => setShowInfoPagas14(!showInfoPagas14)}
+                        className="w-full flex items-center justify-between gap-2 p-3 text-sm font-semibold text-slate-700"
+                      >
+                        <span className="flex items-center gap-2"><AlertCircle className="shrink-0 text-slate-400" size={16} /> {t.infoPagas14Title}</span>
+                        {showInfoPagas14 ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                      </button>
+                      {showInfoPagas14 && <p className="px-3 pb-3 text-sm text-slate-600">{t.pagas14InfoText}</p>}
                     </div>
                   )}
 
-                  <div className="flex gap-3 text-sm text-indigo-700 bg-indigo-50 p-4 rounded-xl border border-indigo-100">
-                    <Target className="shrink-0 text-indigo-500" size={18} />
-                    <div>
-                      <p className="font-bold mb-1">{t.tipoMarginalActual((calculations.marginalRate * 100).toFixed(1))}</p>
-                      <p className="text-indigo-600">{t.tipoMarginalText((calculations.marginalRate * 100).toFixed(1))}</p>
-                    </div>
+                  <div className="bg-indigo-50 rounded-xl border border-indigo-100">
+                    <button
+                      onClick={() => setShowInfoMarginal(!showInfoMarginal)}
+                      className="w-full flex items-center justify-between gap-2 p-3 text-sm font-bold text-indigo-700"
+                    >
+                      <span className="flex items-center gap-2"><Target className="shrink-0 text-indigo-500" size={16} /> {t.infoMarginalTitle}: {(calculations.marginalRate * 100).toFixed(1)}%</span>
+                      {showInfoMarginal ? <ChevronUp size={16}/> : <ChevronDown size={16}/>}
+                    </button>
+                    {showInfoMarginal && <p className="px-3 pb-3 text-sm text-indigo-600">{t.tipoMarginalText((calculations.marginalRate * 100).toFixed(1))}</p>}
                   </div>
                 </div>
               </div>

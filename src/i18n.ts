@@ -41,6 +41,9 @@ export interface Translations {
   pagaExtraLabel: string;
   netoAbrevLabel: string;
   sinSSLabel: string;
+  infoGastosTitle: string;
+  infoPagas14Title: string;
+  infoMarginalTitle: string;
 
   cuotaAutonomoTitle: string;
   eurMesSegSocial: string;
@@ -128,11 +131,14 @@ export const translations: Record<Lang, Translations> = {
     pagas12: '12 pagas',
     pagas14: '14 pagas',
     porPagaLabel: 'por paga',
-    pagas14InfoText: 'Los sueldos de 14 pagas incluyen dos pagas extra (verano y Navidad) por el mismo importe que una mensualidad ordinaria, por lo que el bruto anual se calcula multiplicando por 14, no por 12.',
+    pagas14InfoText: 'Para simplificar, este simulador presupone que cada paga extra tiene el mismo importe que una mensualidad ordinaria. En la práctica esto depende de tu convenio colectivo: por ley una paga extra no puede ser inferior a 30 días de salario base ni al SMI, pero muchas empresas solo incluyen en la extra el salario base (sin pluses de transporte, nocturnidad, etc.), por lo que suele ser menor que una nómina ordinaria completa. De hecho, buena parte de la sensación de "cobrar más" en la paga extra viene de que ese mes no se descuenta la Seguridad Social (ya prorrateada en las nóminas ordinarias) y no de que el bruto sea mayor.',
     nominaOrdinariaLabel: 'Nómina ordinaria',
     pagaExtraLabel: 'Paga extra',
     netoAbrevLabel: 'Neto',
     sinSSLabel: 'sin SS, ya prorrateada',
+    infoGastosTitle: 'Gastos de difícil justificación (autónomos)',
+    infoPagas14Title: 'Cómo se calculan las 14 pagas',
+    infoMarginalTitle: 'Tipo Marginal Actual',
 
     cuotaAutonomoTitle: 'Cuota Autónomo',
     eurMesSegSocial: '€/mes a Seg. Social',
@@ -220,11 +226,14 @@ export const translations: Record<Lang, Translations> = {
     pagas12: '12 payments',
     pagas14: '14 payments',
     porPagaLabel: 'per payment',
-    pagas14InfoText: 'Salaries paid in 14 installments include two extra payments (summer and Christmas) for the same amount as a regular monthly payment, so the annual gross is calculated by multiplying by 14, not 12.',
+    pagas14InfoText: 'To keep things simple, this simulator assumes each extra payment is the same amount as a regular monthly payment. In practice this depends on your collective agreement: by law an extra payment can’t be less than 30 days of base salary nor below the minimum wage, but many companies only include the base salary in the extra payment (no transport allowance, night-shift bonus, etc.), so it’s often smaller than a full regular payslip. In fact, much of the "extra money" feeling from the extra payment comes from Social Security not being withheld that month (it’s already prorated across the regular payslips), not from the gross amount actually being higher.',
     nominaOrdinariaLabel: 'Regular payslip',
     pagaExtraLabel: 'Extra payment',
     netoAbrevLabel: 'Net',
     sinSSLabel: 'no Social Security, already prorated',
+    infoGastosTitle: 'Hard-to-justify expense allowance (self-employed)',
+    infoPagas14Title: 'How the 14 payments are calculated',
+    infoMarginalTitle: 'Current Marginal Rate',
 
     cuotaAutonomoTitle: 'Self-Employed Contribution',
     eurMesSegSocial: '€/month to Social Security',
