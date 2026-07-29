@@ -81,6 +81,7 @@ export interface Translations {
   gastosActividad: string;
   seguridadSocialLabel: string;
   irpfPct: (pct: string) => string;
+  irpfBracketLabel: (rate: string, min: string) => string;
   netoLimpio: string;
 
   infoTecnicaTitle: string;
@@ -177,6 +178,7 @@ export const translations: Record<Lang, Translations> = {
     gastosActividad: 'Gastos Actividad',
     seguridadSocialLabel: 'Seguridad Social',
     irpfPct: (pct) => `IRPF (${pct}%)`,
+    irpfBracketLabel: (rate, min) => `IRPF ${rate}% > ${min}`,
     netoLimpio: 'Neto Limpio',
 
     infoTecnicaTitle: 'Información Técnica',
@@ -273,6 +275,7 @@ export const translations: Record<Lang, Translations> = {
     gastosActividad: 'Business Expenses',
     seguridadSocialLabel: 'Social Security',
     irpfPct: (pct) => `Income Tax (${pct}%)`,
+    irpfBracketLabel: (rate, min) => `Income Tax ${rate}% > ${min}`,
     netoLimpio: 'Net Income',
 
     infoTecnicaTitle: 'Technical Details',

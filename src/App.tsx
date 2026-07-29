@@ -88,6 +88,49 @@ const IRPF_COLORS = [
   'bg-violet-500', 'bg-violet-700', 'bg-purple-600', 'bg-fuchsia-600', 'bg-pink-600', 'bg-rose-700'
 ];
 
+// Por debajo de este % del bruto, un tramo de IRPF se fusiona con el vecino para no saturar
+// el gráfico con micro-tramos (las escalas reales combinadas tienen muchos puntos de corte).
+const MIN_IRPF_SEGMENT_SHARE = 1.5;
+
+interface IrpfBracketSegment {
+  rate: number;
+  amount: number;
+  color: string;
+  min: number;
+  porcentajeDelBruto: number;
+}
+
+/** Fusiona tramos de IRPF con un peso insignificante en el vecino, conservando el importe total exacto. */
+function mergeSmallIrpfBrackets(brackets: IrpfBracketSegment[], minSharePct: number): IrpfBracketSegment[] {
+  const merged: IrpfBracketSegment[] = [];
+
+  for (const b of brackets) {
+    if (merged.length > 0 && b.porcentajeDelBruto < minSharePct) {
+      const prev = merged[merged.length - 1];
+      merged[merged.length - 1] = {
+        ...prev,
+        rate: b.rate,
+        amount: prev.amount + b.amount,
+        porcentajeDelBruto: prev.porcentajeDelBruto + b.porcentajeDelBruto,
+      };
+    } else {
+      merged.push({ ...b });
+    }
+  }
+
+  if (merged.length > 1 && merged[0].porcentajeDelBruto < minSharePct) {
+    const first = merged.shift() as IrpfBracketSegment;
+    merged[0] = {
+      ...merged[0],
+      min: first.min,
+      amount: merged[0].amount + first.amount,
+      porcentajeDelBruto: merged[0].porcentajeDelBruto + first.porcentajeDelBruto,
+    };
+  }
+
+  return merged;
+}
+
 const DEDUCCION_SS_EMPLEADO = 0.0647; // ~6.47% cuota obrera
 
 // Cuotas oficiales con MEI (0,9%) integrado
@@ -167,7 +210,7 @@ function computeIrpfProgressive(base: number, minimoPersonal: number, tramos: Ir
   let limiteAnterior = 0;
   let cuotaTotal = 0;
   let marginalRate = 0;
-  const breakdown: { rate: number; amount: number; tramoIndex: number }[] = [];
+  const breakdown: { rate: number; amount: number; tramoIndex: number; min: number }[] = [];
 
   tramos.forEach((tramo, index) => {
     const anchoTramo = tramo.max - limiteAnterior;
@@ -178,7 +221,7 @@ function computeIrpfProgressive(base: number, minimoPersonal: number, tramos: Ir
     if (amountBaseInTramo > 0) {
       cuotaTotal += taxInTramo;
       marginalRate = tramo.rate;
-      breakdown.push({ rate: tramo.rate * 100, amount: taxInTramo, tramoIndex: index });
+      breakdown.push({ rate: tramo.rate * 100, amount: taxInTramo, tramoIndex: index, min: limiteAnterior });
     }
 
     baseRestante -= amountBaseInTramo;
@@ -192,6 +235,7 @@ function computeIrpfProgressive(base: number, minimoPersonal: number, tramos: Ir
 export default function App() {
   const [lang, setLang] = useState<Lang>('es');
   const t = translations[lang];
+  const formatCurrency = (num: number) => new Intl.NumberFormat(lang === 'es' ? 'es-ES' : 'en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(num);
 
   // Estado Incomes y Cuota
   const [incomes, setIncomes] = useState<Income[]>([
@@ -274,12 +318,16 @@ export default function App() {
     // 5. Cálculo IRPF progresivo (declaración completa: trabajo + autónomo)
     const tramosAplicables = CCAA_RATES[ccaa as keyof typeof CCAA_RATES];
     const { cuota: cuotaIRPF_Total, marginalRate, breakdown: irpfBreakdownRaw } = computeIrpfProgressive(baseImponible, minimoPersonal, tramosAplicables);
-    const irpfBreakdown = irpfBreakdownRaw.map(b => ({
+    const irpfBreakdownFull = irpfBreakdownRaw.map(b => ({
       rate: b.rate,
       amount: b.amount,
       color: IRPF_COLORS[b.tramoIndex],
+      min: b.min,
       porcentajeDelBruto: grossAnualTotal > 0 ? (b.amount / grossAnualTotal) * 100 : 0
     }));
+    // Las escalas combinadas reales tienen muchos puntos de corte; se fusionan los tramos
+    // irrelevantes para el gráfico, sin alterar el cálculo del IRPF total (irpfBreakdownFull).
+    const irpfBreakdown = mergeSmallIrpfBrackets(irpfBreakdownFull, MIN_IRPF_SEGMENT_SHARE);
 
     // 5b. Retención IRPF estimada que debería aplicar el empleador (solo rendimientos del trabajo)
     const { cuota: retencionIRPFAnual } = computeIrpfProgressive(Math.max(0, rendimientosTrabajo), minimoPersonal, tramosAplicables);
@@ -297,7 +345,7 @@ export default function App() {
     const chartSegments = [
       { id: 'gastos', label: t.gastosActividad, amount: autonomoExpensesAnual, color: 'bg-slate-500', porc: (autonomoExpensesAnual / grossAnualTotal) * 100 },
       { id: 'ss', label: t.seguridadSocialLabel, amount: ssTotalAnual, color: 'bg-amber-500', porc: (ssTotalAnual / grossAnualTotal) * 100 },
-      ...irpfBreakdown.map((tr, i) => ({ id: `irpf_${i}`, label: t.irpfPct(tr.rate.toFixed(0)), amount: tr.amount, color: tr.color, porc: tr.porcentajeDelBruto })),
+      ...irpfBreakdown.map((tr, i) => ({ id: `irpf_${i}`, label: t.irpfBracketLabel(tr.rate.toFixed(0), formatCurrency(tr.min)), amount: tr.amount, color: tr.color, porc: tr.porcentajeDelBruto })),
       { id: 'neto', label: t.netoLimpio, amount: netAnual, color: 'bg-indigo-500', porc: (netAnual / grossAnualTotal) * 100 }
     ];
 
@@ -390,7 +438,6 @@ export default function App() {
       return next;
     });
   };
-  const formatCurrency = (num: number) => new Intl.NumberFormat(lang === 'es' ? 'es-ES' : 'en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(num);
 
   const handleExport = () => {
     const payload = { incomes, incomePeriod, employerSSRate, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos };
