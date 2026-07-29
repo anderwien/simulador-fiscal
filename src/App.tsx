@@ -5,16 +5,88 @@ import { translations, type Lang } from './i18n';
 import BreakdownTreemap from './components/BreakdownTreemap';
 
 // --- CONSTANTES FISCALES ---
-// Escala Estatal + Autonómica Promedio
+// Tramos combinados (escala general estatal 2026, Art. 63.1 LIRPF + escala autonómica vigente de cada
+// comunidad), fusionando los puntos de corte de ambas escalas para que el tipo marginal sea exacto en
+// cada euro, no una media. Fuentes: escala estatal (idéntica en las 5), y escala autonómica de cada
+// comunidad — ver detalle de cada tramo en los comentarios.
 const CCAA_RATES = {
-  'Madrid': [ { max: 12450, rate: 0.185 }, { max: 20200, rate: 0.232 }, { max: 35200, rate: 0.283 }, { max: 60000, rate: 0.359 }, { max: 300000, rate: 0.435 }, { max: Infinity, rate: 0.45 } ],
-  'Cataluña': [ { max: 12450, rate: 0.20 }, { max: 20200, rate: 0.24 }, { max: 35200, rate: 0.30 }, { max: 60000, rate: 0.40 }, { max: 300000, rate: 0.46 }, { max: Infinity, rate: 0.48 } ],
-  'Comunidad Valenciana': [ { max: 12450, rate: 0.19 }, { max: 20200, rate: 0.24 }, { max: 35200, rate: 0.30 }, { max: 60000, rate: 0.37 }, { max: 300000, rate: 0.45 }, { max: Infinity, rate: 0.47 } ],
-  'Andalucía': [ { max: 12450, rate: 0.19 }, { max: 20200, rate: 0.24 }, { max: 35200, rate: 0.30 }, { max: 60000, rate: 0.37 }, { max: 300000, rate: 0.45 }, { max: Infinity, rate: 0.47 } ],
-  'General/Resto': [ { max: 12450, rate: 0.19 }, { max: 20200, rate: 0.24 }, { max: 35200, rate: 0.30 }, { max: 60000, rate: 0.37 }, { max: 300000, rate: 0.45 }, { max: Infinity, rate: 0.47 } ]
+  // Madrid: autonómica 8,5%/10,7%/12,8%/17,4%/20,5% (DL 1/2010, mod. Ley 13/2023, sin cambios 2025-2026)
+  'Madrid': [
+    { max: 12450, rate: 0.180 },
+    { max: 13362.22, rate: 0.205 },
+    { max: 19004.63, rate: 0.227 },
+    { max: 20200, rate: 0.248 },
+    { max: 35200, rate: 0.278 },
+    { max: 35425.68, rate: 0.313 },
+    { max: 57320.40, rate: 0.359 },
+    { max: 60000, rate: 0.390 },
+    { max: 300000, rate: 0.430 },
+    { max: Infinity, rate: 0.450 }
+  ],
+  // Cataluña: autonómica 9,5%/12,5%/16%/19%/21,5%/23,5%/24,5%/25,5% (Decret-llei 5/2025, vigente 2026)
+  'Cataluña': [
+    { max: 12450, rate: 0.190 },
+    { max: 12500, rate: 0.215 },
+    { max: 20200, rate: 0.245 },
+    { max: 22000, rate: 0.275 },
+    { max: 33000, rate: 0.310 },
+    { max: 35200, rate: 0.340 },
+    { max: 53000, rate: 0.375 },
+    { max: 60000, rate: 0.400 },
+    { max: 90000, rate: 0.440 },
+    { max: 120000, rate: 0.460 },
+    { max: 175000, rate: 0.470 },
+    { max: 300000, rate: 0.480 },
+    { max: Infinity, rate: 0.500 }
+  ],
+  // Comunidad Valenciana: autonómica 9%/12%/15%/17,5%/20%/22,5%/25%/26,5%/27,5%/28,5%/29,5% (Ley 13/1997,
+  // mod. Ley 9/2022; para 2026 hay una rebaja adicional en los primeros tramos aún no confirmada al detalle,
+  // así que esta tabla puede sobrestimar ligeramente el IRPF en la parte baja de la escala)
+  'Comunidad Valenciana': [
+    { max: 12000, rate: 0.185 },
+    { max: 12450, rate: 0.215 },
+    { max: 20200, rate: 0.240 },
+    { max: 22000, rate: 0.270 },
+    { max: 32000, rate: 0.300 },
+    { max: 35200, rate: 0.325 },
+    { max: 42000, rate: 0.360 },
+    { max: 52000, rate: 0.385 },
+    { max: 60000, rate: 0.410 },
+    { max: 62000, rate: 0.450 },
+    { max: 72000, rate: 0.475 },
+    { max: 100000, rate: 0.490 },
+    { max: 150000, rate: 0.500 },
+    { max: 200000, rate: 0.510 },
+    { max: 300000, rate: 0.520 },
+    { max: Infinity, rate: 0.540 }
+  ],
+  // Andalucía: autonómica 9,5%/12%/15%/18,5%/22,5% (Ley 5/2021, mod. DL 7/2022, vigente 2026)
+  'Andalucía': [
+    { max: 12450, rate: 0.190 },
+    { max: 13000, rate: 0.215 },
+    { max: 20200, rate: 0.240 },
+    { max: 21100, rate: 0.270 },
+    { max: 35200, rate: 0.300 },
+    { max: 60000, rate: 0.370 },
+    { max: 300000, rate: 0.450 },
+    { max: Infinity, rate: 0.470 }
+  ],
+  // General/Resto: escala autonómica supletoria (idéntica a la estatal) para comunidades no listadas arriba
+  'General/Resto': [
+    { max: 12450, rate: 0.190 },
+    { max: 20200, rate: 0.240 },
+    { max: 35200, rate: 0.300 },
+    { max: 60000, rate: 0.370 },
+    { max: 300000, rate: 0.450 },
+    { max: Infinity, rate: 0.490 }
+  ]
 };
 
-const IRPF_COLORS = ['bg-emerald-400', 'bg-teal-500', 'bg-cyan-600', 'bg-blue-600', 'bg-indigo-700', 'bg-violet-900'];
+const IRPF_COLORS = [
+  'bg-emerald-300', 'bg-emerald-500', 'bg-teal-500', 'bg-cyan-500', 'bg-cyan-700',
+  'bg-sky-600', 'bg-blue-500', 'bg-blue-700', 'bg-indigo-500', 'bg-indigo-700',
+  'bg-violet-500', 'bg-violet-700', 'bg-purple-600', 'bg-fuchsia-600', 'bg-pink-600', 'bg-rose-700'
+];
 
 const DEDUCCION_SS_EMPLEADO = 0.0647; // ~6.47% cuota obrera
 
