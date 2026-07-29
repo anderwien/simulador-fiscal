@@ -37,12 +37,18 @@ const TRAMOS_AUTONOMO = [
   { id: 15, min: 6000.01, max: Infinity, cuota: 605.71 }
 ];
 
+/**
+ * amount/expenses siempre se almacenan en anual (el valor canónico), independientemente
+ * de si la vista actual es Mensual o Anual. Así, alternar entre vistas o entre pagas nunca
+ * reescribe el dato original del usuario con una versión redondeada — solo cambia cómo
+ * se muestra (ver getDisplayValue). Esto evita el drift de redondeo en los toggles.
+ */
 interface Income {
   id: number;
   name: string;
   type: string;
-  amount: number | string;
-  expenses: number | string;
+  amount: number;
+  expenses: number;
   pagas: number;
 }
 
@@ -55,9 +61,15 @@ interface ImportedIncome {
   pagas?: number;
 }
 
-/** Multiplicador mensual->anual: pagas extra solo aplican a rentas de trabajo por cuenta ajena. */
+/** Multiplicador anual<->mensual: pagas extra solo aplican a rentas de trabajo por cuenta ajena. */
 function getIncomeFactor(inc: { type: string; pagas: number }): number {
   return inc.type === 'empleado' && inc.pagas === 14 ? 14 : 12;
+}
+
+/** Convierte un valor anual canónico a lo que debe mostrarse según la vista actual (solo para mostrar, nunca se guarda). */
+function getDisplayValue(annualValue: number, period: 'anual' | 'mensual', factor: number): number {
+  const raw = period === 'anual' ? annualValue : annualValue / factor;
+  return Math.round(raw * 100) / 100;
 }
 
 interface ImportedData {
@@ -111,7 +123,7 @@ export default function App() {
 
   // Estado Incomes y Cuota
   const [incomes, setIncomes] = useState<Income[]>([
-    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 25000, expenses: 0, pagas: 12 }
+    { id: 1, name: 'Trabajo Principal', type: 'empleado', amount: 30000, expenses: 0, pagas: 12 }
   ]);
   const [incomePeriod, setIncomePeriod] = useState<'mensual' | 'anual'>('anual');
   const [autonomoQuota, setAutonomoQuota] = useState(478.79);
@@ -141,13 +153,10 @@ export default function App() {
     let autonomoGrossAnual = 0;
     let autonomoExpensesAnual = 0;
 
-    // Sumar ingresos (los sueldos de 14 pagas anualizan con 14 mensualidades, no 12)
+    // Sumar ingresos (amount/expenses ya están siempre en anual, ver comentario en la interfaz Income)
     incomes.forEach(inc => {
-      const multiplier = incomePeriod === 'mensual' ? getIncomeFactor(inc) : 1;
-      const safeAmount = Number(inc.amount) || 0;
-      const safeExpenses = Number(inc.expenses) || 0;
-      const anualAmount = safeAmount * multiplier;
-      const anualExpenses = safeExpenses * multiplier;
+      const anualAmount = Number(inc.amount) || 0;
+      const anualExpenses = Number(inc.expenses) || 0;
 
       grossAnualTotal += anualAmount;
 
@@ -247,7 +256,7 @@ export default function App() {
       porcSS: grossAnualTotal > 0 ? (ssTotalAnual / grossAnualTotal) * 100 : 0,
       porcIRPF: grossAnualTotal > 0 ? (cuotaIRPF_Total / grossAnualTotal) * 100 : 0
     };
-  }, [incomes, incomePeriod, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, employerSSRate, lang, t]);
+  }, [incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, employerSSRate, lang, t]);
 
   // Segmentos del treemap, con el coste de empresa opcionalmente incluido en el total mostrado
   const treemapSegments = useMemo(() => {
@@ -264,45 +273,39 @@ export default function App() {
   }, [calculations, includeEmployerCost, t]);
 
   const addIncome = () => {
-    const defaultAmount = incomePeriod === 'anual' ? 12000 : 1000;
-    setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: defaultAmount, expenses: 0, pagas: 12 }]);
+    setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: 12000, expenses: 0, pagas: 12 }]);
   };
 
+  /**
+   * amount/expenses son siempre el valor anual canónico. Si el campo editado es uno de esos dos,
+   * el número tecleado está en la unidad que se está mostrando (Anual o Mensual), así que se
+   * convierte a anual antes de guardar — nunca se guarda el valor ya redondeado de otra vista.
+   */
   const updateIncome = (id: number, field: string, value: string) => {
     setIncomes(incomes.map(inc => {
       if (inc.id !== id) return inc;
       if (field === 'name' || field === 'type') return { ...inc, [field]: value };
 
-      let parsedValue: number | string = value === '' ? '' : Number(value);
-      if (typeof parsedValue === 'number' && Number.isNaN(parsedValue)) parsedValue = 0;
-      return { ...inc, [field]: parsedValue };
+      const raw = Number(value);
+      const safeRaw = Number.isNaN(raw) ? 0 : raw;
+
+      if (field === 'amount' || field === 'expenses') {
+        const factor = getIncomeFactor(inc);
+        const annualValue = incomePeriod === 'anual' ? safeRaw : safeRaw * factor;
+        return { ...inc, [field]: annualValue };
+      }
+
+      return { ...inc, [field]: safeRaw };
     }));
   };
 
+  // El dato guardado (amount) es siempre anual, así que cambiar de pagas no necesita recalcular nada.
   const updateIncomePagas = (id: number, newPagas: 12 | 14) => {
-    const round2 = (n: number) => Math.round(n * 100) / 100;
-    setIncomes(prev => prev.map(inc => {
-      if (inc.id !== id || inc.pagas === newPagas) return inc;
-      if (incomePeriod === 'anual') return { ...inc, pagas: newPagas };
-
-      // Mensual: mantiene el bruto anual constante y recalcula la mensualidad para el nuevo número de pagas
-      const currentAnual = (Number(inc.amount) || 0) * inc.pagas;
-      return { ...inc, pagas: newPagas, amount: round2(currentAnual / newPagas) };
-    }));
+    setIncomes(prev => prev.map(inc => (inc.id === id ? { ...inc, pagas: newPagas } : inc)));
   };
 
+  // El dato guardado es siempre anual, así que cambiar de vista tampoco necesita recalcular nada.
   const changeIncomePeriod = (newPeriod: 'mensual' | 'anual') => {
-    if (newPeriod === incomePeriod) return;
-    const round2 = (n: number) => Math.round(n * 100) / 100;
-    setIncomes(prev => prev.map(inc => {
-      const incomeFactor = getIncomeFactor(inc);
-      const factor = newPeriod === 'anual' ? incomeFactor : 1 / incomeFactor;
-      return {
-        ...inc,
-        amount: round2((Number(inc.amount) || 0) * factor),
-        expenses: round2((Number(inc.expenses) || 0) * factor),
-      };
-    }));
     setIncomePeriod(newPeriod);
   };
 
@@ -563,6 +566,9 @@ export default function App() {
                   {incomes.map((inc) => {
                     const sliderMax = incomePeriod === 'anual' ? 150000 : 12000;
                     const sliderStep = incomePeriod === 'anual' ? 500 : 50;
+                    const incomeFactor = getIncomeFactor(inc);
+                    const displayAmount = getDisplayValue(Number(inc.amount) || 0, incomePeriod, incomeFactor);
+                    const displayExpenses = getDisplayValue(Number(inc.expenses) || 0, incomePeriod, incomeFactor);
                     return (
                     <div key={inc.id} className="p-3 bg-slate-50 rounded-xl border border-slate-100 text-sm">
                       <div className="flex items-center gap-2 mb-2">
@@ -598,8 +604,8 @@ export default function App() {
                           {t.ingresoLabel} ({incomePeriod === 'anual' ? t.periodAnual : t.periodMensual}{inc.type === 'empleado' && inc.pagas === 14 && incomePeriod === 'mensual' ? ` · ${t.porPagaLabel}` : ''})
                         </label>
                         <div className="flex items-center gap-2 mt-1">
-                          <input type="range" min="0" max={sliderMax} step={sliderStep} value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="flex-1 accent-indigo-600"/>
-                          <input type="number" value={inc.amount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
+                          <input type="range" min="0" max={sliderMax} step={sliderStep} value={displayAmount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="flex-1 accent-indigo-600"/>
+                          <input type="number" value={displayAmount} onChange={(e) => updateIncome(inc.id, 'amount', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
                         </div>
                       </div>
 
@@ -607,14 +613,14 @@ export default function App() {
                         <div className="pt-2 border-t border-slate-200">
                           <label className="text-xs font-medium text-orange-600">{t.gastosDeduciblesLabel}</label>
                           <div className="flex items-center gap-2 mt-1">
-                            <input type="range" min="0" max={Number(inc.amount) || 1000} step="10" value={inc.expenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="flex-1 accent-orange-500"/>
-                            <input type="number" value={inc.expenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
+                            <input type="range" min="0" max={displayAmount || 1000} step="10" value={displayExpenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="flex-1 accent-orange-500"/>
+                            <input type="number" value={displayExpenses} onChange={(e) => updateIncome(inc.id, 'expenses', e.target.value)} className="w-24 p-1 border border-slate-300 rounded font-medium text-slate-700"/>
                           </div>
                         </div>
                       )}
 
                       {inc.type === 'empleado' && incomePeriod === 'mensual' && nominaDetalleIds.has(inc.id) && (() => {
-                        const perPaymentBruto = Number(inc.amount) || 0;
+                        const perPaymentBruto = (Number(inc.amount) || 0) / inc.pagas;
                         const ssAnualEstaFuente = perPaymentBruto * inc.pagas * DEDUCCION_SS_EMPLEADO;
                         const ssPerOrdinaria = ssAnualEstaFuente / 12;
                         // El IRPF se retiene sobre el bruto ya neto de SS de esa nómina; la extra no tiene SS que restar.
