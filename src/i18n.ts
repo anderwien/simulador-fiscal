@@ -2,6 +2,7 @@ export type Lang = 'es' | 'en';
 
 export interface Translations {
   appTitle: string;
+  appSubtitle: string;
   toggleAnual: string;
   toggleMensual: string;
   bruto: string;
@@ -53,6 +54,8 @@ export interface Translations {
   ssEmpresaLabel: string;
   costeTotalEmpresaLabel: string;
   costeEmpresaCaveat: string;
+  costeEmpresaSegmentLabel: string;
+  incluirCosteEmpresaCheckbox: string;
 
   retencionTitle: string;
   retencionMensualLabel: string;
@@ -77,6 +80,7 @@ export interface Translations {
 export const translations: Record<Lang, Translations> = {
   es: {
     appTitle: 'Simulador Fiscal',
+    appSubtitle: 'Para España · Empleados y Autónomos',
     toggleAnual: 'Anual',
     toggleMensual: 'Mensual',
     bruto: 'Bruto',
@@ -132,6 +136,8 @@ export const translations: Record<Lang, Translations> = {
     ssEmpresaLabel: 'Seguridad Social Empresa',
     costeTotalEmpresaLabel: 'Coste Total Empresa',
     costeEmpresaCaveat: 'Estimación con un tipo medio combinado (contingencias comunes, desempleo, FOGASA, formación profesional y accidentes de trabajo). El tipo real varía según el tipo de contrato y la actividad (CNAE) de la empresa; ajústalo si conoces el tuyo.',
+    costeEmpresaSegmentLabel: 'Coste Empresa (SS)',
+    incluirCosteEmpresaCheckbox: 'Incluir coste de empresa (SS a cargo de la empresa)',
 
     retencionTitle: '¿Cuánto IRPF debería retener mensualmente mi empresa?',
     retencionMensualLabel: 'Retención mensual estimada',
@@ -156,6 +162,7 @@ export const translations: Record<Lang, Translations> = {
   },
   en: {
     appTitle: 'Tax Simulator',
+    appSubtitle: 'For Spain · Employees & Self-Employed',
     toggleAnual: 'Annual',
     toggleMensual: 'Monthly',
     bruto: 'Gross',
@@ -211,6 +218,8 @@ export const translations: Record<Lang, Translations> = {
     ssEmpresaLabel: 'Employer Social Security',
     costeTotalEmpresaLabel: 'Total Company Cost',
     costeEmpresaCaveat: 'Estimated using an average combined rate (common contingencies, unemployment, FOGASA, vocational training, and workplace accident insurance). The real rate varies by contract type and the company’s industry (CNAE) — adjust it if you know your own.',
+    costeEmpresaSegmentLabel: 'Employer Cost (SS)',
+    incluirCosteEmpresaCheckbox: 'Include employer cost (company-paid Social Security)',
 
     retencionTitle: 'How much income tax should my employer withhold monthly?',
     retencionMensualLabel: 'Estimated monthly withholding',

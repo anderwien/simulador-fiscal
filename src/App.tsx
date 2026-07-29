@@ -112,6 +112,7 @@ export default function App() {
   const [showOptimization, setShowOptimization] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
   const [employerSSRate, setEmployerSSRate] = useState(31);
+  const [includeEmployerCost, setIncludeEmployerCost] = useState(false);
 
   // Estados Personales IRPF
   const [ccaa, setCcaa] = useState('Comunidad Valenciana');
@@ -237,6 +238,20 @@ export default function App() {
     };
   }, [incomes, incomePeriod, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, employerSSRate, lang, t]);
 
+  // Segmentos del treemap, con el coste de empresa opcionalmente incluido en el total mostrado
+  const treemapSegments = useMemo(() => {
+    const base = calculations.chartSegments;
+    if (!includeEmployerCost || !calculations.hasEmpleado || calculations.costeEmpresaAnual <= 0) {
+      return base;
+    }
+    const total = calculations.grossAnualTotal + calculations.costeEmpresaAnual;
+    const withEmployerCost = [
+      ...base,
+      { id: 'costeEmpresa', label: t.costeEmpresaSegmentLabel, amount: calculations.costeEmpresaAnual, color: 'bg-fuchsia-600', porc: 0 }
+    ];
+    return withEmployerCost.map(seg => ({ ...seg, porc: total > 0 ? (seg.amount / total) * 100 : 0 }));
+  }, [calculations, includeEmployerCost, t]);
+
   const addIncome = () => {
     const defaultAmount = incomePeriod === 'anual' ? 12000 : 1000;
     setIncomes([...incomes, { id: Date.now(), name: t.nuevoIngreso, type: 'empleado', amount: defaultAmount, expenses: 0 }]);
@@ -341,7 +356,10 @@ export default function App() {
           <div className="flex flex-wrap justify-between items-center gap-2 mb-3">
              <div className="flex items-center gap-1.5 text-indigo-600">
                <Target size={16} />
-               <span className="text-xs font-bold uppercase tracking-widest">{t.appTitle}</span>
+               <div className="leading-tight">
+                 <span className="text-xs font-bold uppercase tracking-widest block">{t.appTitle}</span>
+                 <span className="text-[10px] text-slate-400 font-medium block normal-case tracking-normal">{t.appSubtitle}</span>
+               </div>
              </div>
 
              <div className="flex items-center gap-2 flex-wrap">
@@ -557,7 +575,13 @@ export default function App() {
                  <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
                   <BarChart size={20} className="text-blue-500"/> {t.breakdownTitle}
                 </h3>
-                <BreakdownTreemap segments={calculations.chartSegments} formatCurrency={formatCurrency} emptyMessage={t.introduceIngresos} />
+                {calculations.hasEmpleado && (
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-600 mb-3 cursor-pointer select-none">
+                    <input type="checkbox" checked={includeEmployerCost} onChange={() => setIncludeEmployerCost(v => !v)} className="rounded accent-indigo-600"/>
+                    {t.incluirCosteEmpresaCheckbox}
+                  </label>
+                )}
+                <BreakdownTreemap segments={treemapSegments} formatCurrency={formatCurrency} emptyMessage={t.introduceIngresos} />
               </div>
 
               {/* Panel Cuota & Optimización */}
