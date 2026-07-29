@@ -272,11 +272,22 @@ export default function App() {
     setIncomes(incomes.map(inc => {
       if (inc.id !== id) return inc;
       if (field === 'name' || field === 'type') return { ...inc, [field]: value };
-      if (field === 'pagas') return { ...inc, pagas: Number(value) === 14 ? 14 : 12 };
 
       let parsedValue: number | string = value === '' ? '' : Number(value);
       if (typeof parsedValue === 'number' && Number.isNaN(parsedValue)) parsedValue = 0;
       return { ...inc, [field]: parsedValue };
+    }));
+  };
+
+  const updateIncomePagas = (id: number, newPagas: 12 | 14) => {
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    setIncomes(prev => prev.map(inc => {
+      if (inc.id !== id || inc.pagas === newPagas) return inc;
+      if (incomePeriod === 'anual') return { ...inc, pagas: newPagas };
+
+      // Mensual: mantiene el bruto anual constante y recalcula la mensualidad para el nuevo número de pagas
+      const currentAnual = (Number(inc.amount) || 0) * inc.pagas;
+      return { ...inc, pagas: newPagas, amount: round2(currentAnual / newPagas) };
     }));
   };
 
@@ -568,10 +579,10 @@ export default function App() {
                       {inc.type === 'empleado' && incomePeriod === 'mensual' && (
                         <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200">
-                            <button type="button" onClick={() => updateIncome(inc.id, 'pagas', '12')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 12 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
+                            <button type="button" onClick={() => updateIncomePagas(inc.id, 12)} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 12 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
                               {t.pagas12}
                             </button>
-                            <button type="button" onClick={() => updateIncome(inc.id, 'pagas', '14')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 14 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
+                            <button type="button" onClick={() => updateIncomePagas(inc.id, 14)} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 14 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
                               {t.pagas14}
                             </button>
                           </div>
@@ -606,23 +617,26 @@ export default function App() {
                         const perPaymentBruto = Number(inc.amount) || 0;
                         const ssAnualEstaFuente = perPaymentBruto * inc.pagas * DEDUCCION_SS_EMPLEADO;
                         const ssPerOrdinaria = ssAnualEstaFuente / 12;
-                        const irpfPerPago = (calculations.tipoRetencionEstimado / 100) * perPaymentBruto;
-                        const netoOrdinaria = perPaymentBruto - ssPerOrdinaria - irpfPerPago;
-                        const netoExtra = perPaymentBruto - irpfPerPago;
+                        // El IRPF se retiene sobre el bruto ya neto de SS de esa nómina; la extra no tiene SS que restar.
+                        const baseOrdinaria = perPaymentBruto - ssPerOrdinaria;
+                        const irpfOrdinaria = (calculations.tipoRetencionEstimado / 100) * baseOrdinaria;
+                        const irpfExtra = (calculations.tipoRetencionEstimado / 100) * perPaymentBruto;
+                        const netoOrdinaria = baseOrdinaria - irpfOrdinaria;
+                        const netoExtra = perPaymentBruto - irpfExtra;
                         return (
                           <div className={`pt-2 border-t border-slate-200 grid gap-3 text-xs ${inc.pagas === 14 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                             <div>
                               <p className="font-semibold text-slate-600 mb-1">{t.nominaOrdinariaLabel}</p>
                               <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
                               <p className="text-amber-600">−SS: {formatCurrency(ssPerOrdinaria)}</p>
-                              <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
+                              <p className="text-rose-500">−IRPF: {formatCurrency(irpfOrdinaria)}</p>
                               <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoOrdinaria)}</p>
                             </div>
                             {inc.pagas === 14 && (
                               <div>
                                 <p className="font-semibold text-slate-600 mb-1">{t.pagaExtraLabel}</p>
                                 <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
-                                <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
+                                <p className="text-rose-500">−IRPF: {formatCurrency(irpfExtra)}</p>
                                 <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoExtra)}</p>
                                 <p className="text-slate-400">({t.sinSSLabel})</p>
                               </div>
@@ -731,7 +745,7 @@ export default function App() {
 
                   {/* Retención IRPF Estimada */}
                   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                    <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</h2>
+                    <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Receipt size={26} className="text-blue-500 -m-1"/> {t.retencionTitle}</h2>
                     <div className="mb-3">
                       <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.tipoRetencionSublabel}</p>
                       <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
