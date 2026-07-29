@@ -110,6 +110,9 @@ export default function App() {
   const [autonomoQuota, setAutonomoQuota] = useState(478.79);
   const [autoCalculateQuota, setAutoCalculateQuota] = useState(true);
   const [showOptimization, setShowOptimization] = useState(false);
+  const [showCosteEmpresa, setShowCosteEmpresa] = useState(false);
+  const [showRetencion, setShowRetencion] = useState(false);
+  const [showInfoTecnica, setShowInfoTecnica] = useState(false);
   const [isMonthlyView, setIsMonthlyView] = useState(false); // Toggle Anual/Mensual
   const [employerSSRate, setEmployerSSRate] = useState(31);
   const [includeEmployerCost, setIncludeEmployerCost] = useState(false);
@@ -454,10 +457,10 @@ export default function App() {
 
       <div className="p-4 md:p-8 flex-grow w-full">
         <div className="max-w-7xl mx-auto space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
             {/* COLUMNA IZQUIERDA: INPUTS */}
-            <div className="space-y-4">
+            <div className="lg:col-span-1 space-y-4">
 
               {/* Panel Perfil Personal */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
@@ -568,7 +571,7 @@ export default function App() {
             </div>
 
             {/* COLUMNA DERECHA: RESULTADOS */}
-            <div className="space-y-6">
+            <div className="lg:col-span-2 space-y-6">
 
               {/* GRÁFICO TOTAL DEL BRUTO */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -662,52 +665,81 @@ export default function App() {
               {/* Coste para la Empresa */}
               {calculations.hasEmpleado && (
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</h2>
-                  <div className="flex items-center gap-2 mb-4">
-                    <input
-                      type="number"
-                      value={employerSSRate}
-                      onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
-                      className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
-                  </div>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
-                      <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
+                  <button
+                    onClick={() => setShowCosteEmpresa(!showCosteEmpresa)}
+                    className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
+                  >
+                    <span className="flex items-center gap-2"><Building2 size={18} className="text-blue-500"/> {t.costeEmpresaTitle}</span>
+                    {showCosteEmpresa ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                  </button>
+
+                  {showCosteEmpresa && (
+                    <div className="mt-4">
+                      <div className="flex items-center gap-2 mb-4">
+                        <input
+                          type="number"
+                          value={employerSSRate}
+                          onChange={(e) => setEmployerSSRate(Number(e.target.value) || 0)}
+                          className="w-16 p-1.5 border border-slate-200 rounded-md font-bold text-slate-700 text-center outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                        <span className="text-xs text-slate-500">% {t.tipoSSEmpresaLabel}</span>
+                      </div>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">{t.salarioBrutoEmpleadoLabel}</span>
+                          <span className="font-semibold text-slate-700">{formatCurrency(isMonthlyView ? calculations.empleadoGrossAnual / 12 : calculations.empleadoGrossAnual)}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-slate-500">{t.ssEmpresaLabel}</span>
+                          <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
+                        </div>
+                        <div className="flex justify-between items-center pt-2 border-t border-slate-100">
+                          <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
+                          <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
+                        </div>
+                      </div>
+                      <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-slate-500">{t.ssEmpresaLabel}</span>
-                      <span className="font-semibold text-amber-600">+{formatCurrency(isMonthlyView ? calculations.costeEmpresaAnual / 12 : calculations.costeEmpresaAnual)}</span>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-slate-100">
-                      <span className="font-bold text-slate-800">{t.costeTotalEmpresaLabel}</span>
-                      <span className="font-black text-indigo-600 text-lg">{formatCurrency(isMonthlyView ? calculations.costeEmpresaTotalAnual / 12 : calculations.costeEmpresaTotalAnual)}</span>
-                    </div>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-4">{t.costeEmpresaCaveat}</p>
+                  )}
                 </div>
               )}
 
               {/* Retención IRPF Estimada */}
               {calculations.hasEmpleado && (
                 <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                  <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</h3>
-                  <div className="mb-3">
-                    <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.retencionMensualLabel}</p>
-                    <p className="text-3xl font-black text-indigo-600">{formatCurrency(calculations.retencionIRPFMensual)}</p>
-                  </div>
-                  <p className="text-sm text-slate-600 mb-3">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
-                  <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
+                  <button
+                    onClick={() => setShowRetencion(!showRetencion)}
+                    className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
+                  >
+                    <span className="flex items-center gap-2"><Receipt size={18} className="text-blue-500"/> {t.retencionTitle}</span>
+                    {showRetencion ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                  </button>
+
+                  {showRetencion && (
+                    <div className="mt-4">
+                      <div className="mb-3">
+                        <p className="text-xs text-slate-500 font-semibold uppercase mb-0.5">{t.tipoRetencionSublabel}</p>
+                        <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
+                      </div>
+                      <p className="text-sm text-slate-600 mb-3">{t.retencionMensualLabel}: <span className="font-semibold text-slate-700">{formatCurrency(calculations.retencionIRPFMensual)}</span></p>
+                      <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* Insights */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</h3>
+                <button
+                  onClick={() => setShowInfoTecnica(!showInfoTecnica)}
+                  className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
+                >
+                  <span className="flex items-center gap-2"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</span>
+                  {showInfoTecnica ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                </button>
 
-                 <div className="space-y-4">
+                {showInfoTecnica && (
+                 <div className="space-y-4 mt-4">
                     <div className="flex gap-3 text-sm text-slate-600 bg-slate-50 p-4 rounded-xl border border-slate-100">
                       <AlertCircle className="shrink-0 text-slate-400" size={18} />
                       <p>{t.infoTecnicaText}</p>
@@ -721,6 +753,7 @@ export default function App() {
                       </div>
                     </div>
                  </div>
+                )}
               </div>
 
             </div>

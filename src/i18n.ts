@@ -60,6 +60,7 @@ export interface Translations {
   retencionTitle: string;
   retencionMensualLabel: string;
   tipoRetencionLabel: (pct: string) => string;
+  tipoRetencionSublabel: string;
   retencionCaveat: string;
 
   breakdownTitle: string;
@@ -139,10 +140,11 @@ export const translations: Record<Lang, Translations> = {
     costeEmpresaSegmentLabel: 'Coste Empresa (SS)',
     incluirCosteEmpresaCheckbox: 'Incluir coste de empresa (SS a cargo de la empresa)',
 
-    retencionTitle: '¿Cuánto IRPF debería retener mensualmente mi empresa?',
+    retencionTitle: '¿Cuánto IRPF deberían retenerme mensualmente mis pagadores?',
     retencionMensualLabel: 'Retención mensual estimada',
-    tipoRetencionLabel: (pct) => `Tipo de retención estimado: ${pct}%`,
-    retencionCaveat: 'Estimación según el procedimiento general de retenciones (Art. 82-89 del Reglamento del IRPF), considerando solo los rendimientos del trabajo de esta empresa. La retención real de tu nómina puede variar ligeramente (gastos deducibles del trabajador, otros pagadores, fecha de inicio del contrato, etc.).',
+    tipoRetencionLabel: (pct) => `${pct}%`,
+    tipoRetencionSublabel: 'Tipo de retención estimado',
+    retencionCaveat: 'Estimación según el procedimiento general de retenciones (Art. 82-89 del Reglamento del IRPF), considerando solo tus rendimientos del trabajo. La retención real de tu nómina puede variar ligeramente (gastos deducibles del trabajador, otros pagadores, fecha de inicio del contrato, etc.).',
 
     breakdownTitle: 'A dónde va cada Euro de tu Bruto Total',
     introduceIngresos: 'Introduce ingresos para ver el desglose',
@@ -221,10 +223,11 @@ export const translations: Record<Lang, Translations> = {
     costeEmpresaSegmentLabel: 'Employer Cost (SS)',
     incluirCosteEmpresaCheckbox: 'Include employer cost (company-paid Social Security)',
 
-    retencionTitle: 'How much income tax should my employer withhold monthly?',
+    retencionTitle: 'How much income tax should my payers withhold monthly?',
     retencionMensualLabel: 'Estimated monthly withholding',
-    tipoRetencionLabel: (pct) => `Estimated withholding rate: ${pct}%`,
-    retencionCaveat: 'Estimated using the general withholding procedure (Spanish Income Tax Regulation, Art. 82-89), considering only the income earned from this employer. Your actual payslip withholding may differ slightly (worker-specific deductions, other payers, contract start date, etc.).',
+    tipoRetencionLabel: (pct) => `${pct}%`,
+    tipoRetencionSublabel: 'Estimated withholding rate',
+    retencionCaveat: 'Estimated using the general withholding procedure (Spanish Income Tax Regulation, Art. 82-89), considering only your earned income. Your actual payslip withholding may differ slightly (worker-specific deductions, other payers, contract start date, etc.).',
 
     breakdownTitle: 'Where Every Euro of Your Gross Income Goes',
     introduceIngresos: 'Add income to see the breakdown',
