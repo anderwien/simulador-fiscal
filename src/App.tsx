@@ -117,6 +117,7 @@ export default function App() {
   const [autonomoQuota, setAutonomoQuota] = useState(478.79);
   const [autoCalculateQuota, setAutoCalculateQuota] = useState(true);
   const [showOptimization, setShowOptimization] = useState(false);
+  const [nominaDetalleIds, setNominaDetalleIds] = useState<Set<number>>(new Set());
   const [showInfoGastos, setShowInfoGastos] = useState(false);
   const [showInfoPagas14, setShowInfoPagas14] = useState(false);
   const [showInfoMarginal, setShowInfoMarginal] = useState(false);
@@ -295,6 +296,14 @@ export default function App() {
   };
 
   const removeIncome = (id: number) => setIncomes(incomes.filter(inc => inc.id !== id));
+
+  const toggleNominaDetalle = (id: number) => {
+    setNominaDetalleIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
   const formatCurrency = (num: number) => new Intl.NumberFormat(lang === 'es' ? 'es-ES' : 'en-IE', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(num);
 
   const handleExport = () => {
@@ -557,7 +566,7 @@ export default function App() {
                       </div>
 
                       {inc.type === 'empleado' && incomePeriod === 'mensual' && (
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
                           <div className="flex items-center bg-white p-0.5 rounded-md border border-slate-200">
                             <button type="button" onClick={() => updateIncome(inc.id, 'pagas', '12')} className={`text-[10px] font-semibold px-2 py-0.5 rounded transition-colors ${inc.pagas === 12 ? 'bg-indigo-100 text-indigo-700' : 'text-slate-400 hover:text-slate-600'}`}>
                               {t.pagas12}
@@ -566,6 +575,10 @@ export default function App() {
                               {t.pagas14}
                             </button>
                           </div>
+                          <label className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500 cursor-pointer select-none">
+                            <input type="checkbox" checked={nominaDetalleIds.has(inc.id)} onChange={() => toggleNominaDetalle(inc.id)} className="rounded accent-indigo-600"/>
+                            {t.detallesNominaLabel}
+                          </label>
                         </div>
                       )}
 
@@ -589,15 +602,15 @@ export default function App() {
                         </div>
                       )}
 
-                      {inc.type === 'empleado' && inc.pagas === 14 && (() => {
-                        const perPaymentBruto = incomePeriod === 'anual' ? (Number(inc.amount) || 0) / 14 : (Number(inc.amount) || 0);
-                        const ssAnualEstaFuente = perPaymentBruto * 14 * DEDUCCION_SS_EMPLEADO;
+                      {inc.type === 'empleado' && incomePeriod === 'mensual' && nominaDetalleIds.has(inc.id) && (() => {
+                        const perPaymentBruto = Number(inc.amount) || 0;
+                        const ssAnualEstaFuente = perPaymentBruto * inc.pagas * DEDUCCION_SS_EMPLEADO;
                         const ssPerOrdinaria = ssAnualEstaFuente / 12;
                         const irpfPerPago = (calculations.tipoRetencionEstimado / 100) * perPaymentBruto;
                         const netoOrdinaria = perPaymentBruto - ssPerOrdinaria - irpfPerPago;
                         const netoExtra = perPaymentBruto - irpfPerPago;
                         return (
-                          <div className="pt-2 border-t border-slate-200 grid grid-cols-2 gap-3 text-xs">
+                          <div className={`pt-2 border-t border-slate-200 grid gap-3 text-xs ${inc.pagas === 14 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                             <div>
                               <p className="font-semibold text-slate-600 mb-1">{t.nominaOrdinariaLabel}</p>
                               <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
@@ -605,13 +618,15 @@ export default function App() {
                               <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
                               <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoOrdinaria)}</p>
                             </div>
-                            <div>
-                              <p className="font-semibold text-slate-600 mb-1">{t.pagaExtraLabel}</p>
-                              <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
-                              <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
-                              <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoExtra)}</p>
-                              <p className="text-slate-400">({t.sinSSLabel})</p>
-                            </div>
+                            {inc.pagas === 14 && (
+                              <div>
+                                <p className="font-semibold text-slate-600 mb-1">{t.pagaExtraLabel}</p>
+                                <p className="text-slate-500">{t.ingresoLabel}: {formatCurrency(perPaymentBruto)}</p>
+                                <p className="text-rose-500">−IRPF: {formatCurrency(irpfPerPago)}</p>
+                                <p className="font-bold text-slate-800">{t.netoAbrevLabel}: {formatCurrency(netoExtra)}</p>
+                                <p className="text-slate-400">({t.sinSSLabel})</p>
+                              </div>
+                            )}
                           </div>
                         );
                       })()}

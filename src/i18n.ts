@@ -41,6 +41,7 @@ export interface Translations {
   pagaExtraLabel: string;
   netoAbrevLabel: string;
   sinSSLabel: string;
+  detallesNominaLabel: string;
   infoGastosTitle: string;
   infoPagas14Title: string;
   infoMarginalTitle: string;
@@ -136,6 +137,7 @@ export const translations: Record<Lang, Translations> = {
     pagaExtraLabel: 'Paga extra',
     netoAbrevLabel: 'Neto',
     sinSSLabel: 'sin SS, ya prorrateada',
+    detallesNominaLabel: 'Detalles Nómina',
     infoGastosTitle: 'Gastos de difícil justificación (autónomos)',
     infoPagas14Title: 'Cómo se calculan las 14 pagas',
     infoMarginalTitle: 'Tipo Marginal Actual',
@@ -231,6 +233,7 @@ export const translations: Record<Lang, Translations> = {
     pagaExtraLabel: 'Extra payment',
     netoAbrevLabel: 'Net',
     sinSSLabel: 'no Social Security, already prorated',
+    detallesNominaLabel: 'Payslip Details',
     infoGastosTitle: 'Hard-to-justify expense allowance (self-employed)',
     infoPagas14Title: 'How the 14 payments are calculated',
     infoMarginalTitle: 'Current Marginal Rate',
