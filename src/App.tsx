@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload, Building2, Receipt } from 'lucide-react';
+import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload, Building2, Receipt, Wallet } from 'lucide-react';
 import { translations, type Lang } from './i18n';
 import BreakdownTreemap from './components/BreakdownTreemap';
 
@@ -231,6 +231,116 @@ function computeIrpfProgressive(base: number, minimoPersonal: number, tramos: Ir
   return { cuota: Math.max(0, cuotaTotal), marginalRate, breakdown };
 }
 
+/**
+ * Núcleo numérico puro del simulador: dado un conjunto de ingresos y circunstancias personales,
+ * calcula bruto/SS/IRPF/neto. Se usa tanto desde el useMemo principal como desde el solucionador
+ * neto->bruto (bisección), que necesita invocarlo muchas veces con importes hipotéticos.
+ */
+function computeTaxSummary(
+  incomes: Income[],
+  ccaa: string,
+  estadoCivil: string,
+  hijos: number,
+  autonomoQuota: number,
+  autoCalculateQuota: boolean
+) {
+  let grossAnualTotal = 0;
+  let ssEmpleadoAnual = 0;
+  let autonomoGrossAnual = 0;
+  let autonomoExpensesAnual = 0;
+
+  incomes.forEach(inc => {
+    const anualAmount = Number(inc.amount) || 0;
+    const anualExpenses = Number(inc.expenses) || 0;
+
+    grossAnualTotal += anualAmount;
+
+    if (inc.type === 'empleado') {
+      ssEmpleadoAnual += anualAmount * DEDUCCION_SS_EMPLEADO;
+    } else {
+      autonomoGrossAnual += anualAmount;
+      autonomoExpensesAnual += anualExpenses;
+    }
+  });
+
+  // 1. Autónomo: Calcular Rendimiento para Tramos SS (-7% ded. difícil justificación)
+  const rendimientoNetoSSMensual = autonomoGrossAnual > 0
+    ? ((autonomoGrossAnual - autonomoExpensesAnual) / 12) * 0.93
+    : 0;
+
+  const currentTramo = TRAMOS_AUTONOMO.find(tr => rendimientoNetoSSMensual >= tr.min && rendimientoNetoSSMensual <= tr.max) || TRAMOS_AUTONOMO[0];
+  const safeAutonomoQuota = Number(autonomoQuota) || 0;
+  const cuotaFinal = autoCalculateQuota ? currentTramo.cuota : safeAutonomoQuota;
+  const ssAutonomoAnual = autonomoGrossAnual > 0 ? cuotaFinal * 12 : 0;
+
+  // 2. Autónomo: Calcular Rendimiento para IRPF (-5% ded. difícil justificación)
+  let rendimientoNetoIRPF = autonomoGrossAnual - autonomoExpensesAnual - ssAutonomoAnual;
+  if (rendimientoNetoIRPF > 0) {
+    const deduccionAplicadaIRPF = Math.min(rendimientoNetoIRPF * 0.05, 2000);
+    rendimientoNetoIRPF -= deduccionAplicadaIRPF;
+  } else {
+    rendimientoNetoIRPF = 0;
+  }
+
+  // 3. Mínimo Personal y Familiar
+  let minimoPersonal = 5550;
+  if (hijos >= 1) minimoPersonal += 2400;
+  if (hijos >= 2) minimoPersonal += 2700;
+  if (hijos >= 3) minimoPersonal += 4000;
+  if (hijos >= 4) minimoPersonal += 4500;
+  if (estadoCivil === 'casado_conjunta') minimoPersonal += 3400;
+
+  // 4. Base Imponible
+  const rendimientosTrabajo = (grossAnualTotal - autonomoGrossAnual) - ssEmpleadoAnual;
+  const baseImponible = rendimientosTrabajo + rendimientoNetoIRPF;
+
+  // 5. Cálculo IRPF progresivo (declaración completa: trabajo + autónomo)
+  const tramosAplicables = CCAA_RATES[ccaa as keyof typeof CCAA_RATES];
+  const { cuota: cuotaIRPF_Total, marginalRate, breakdown: irpfBreakdownRaw } = computeIrpfProgressive(baseImponible, minimoPersonal, tramosAplicables);
+
+  // 5b. Retención IRPF estimada que debería aplicar el empleador (solo rendimientos del trabajo)
+  const { cuota: retencionIRPFAnual } = computeIrpfProgressive(Math.max(0, rendimientosTrabajo), minimoPersonal, tramosAplicables);
+  const tipoRetencionEstimado = rendimientosTrabajo > 0 ? (retencionIRPFAnual / rendimientosTrabajo) * 100 : 0;
+
+  const ssTotalAnual = ssEmpleadoAnual + ssAutonomoAnual;
+  const netAnual = grossAnualTotal - ssTotalAnual - cuotaIRPF_Total - autonomoExpensesAnual;
+  const empleadoGrossAnual = grossAnualTotal - autonomoGrossAnual;
+
+  return {
+    grossAnualTotal, ssTotalAnual, autonomoExpensesAnual, cuotaIRPF_Total, netAnual,
+    rendimientoNetoSSMensual, currentTramo, cuotaFinal, marginalRate, irpfBreakdownRaw,
+    baseImponible, minimoPersonal, autonomoGrossAnual, retencionIRPFAnual, tipoRetencionEstimado,
+    empleadoGrossAnual,
+  };
+}
+
+/**
+ * Encuentra por bisección el bruto anual de un ingreso concreto que hace que el neto anual
+ * total coincida con targetNetAnual, dejando el resto de ingresos y circunstancias fijos.
+ */
+function solveGrossForTargetNet(
+  incomes: Income[],
+  targetIncomeId: number,
+  targetNetAnual: number,
+  ccaa: string,
+  estadoCivil: string,
+  hijos: number,
+  autonomoQuota: number,
+  autoCalculateQuota: boolean
+): number {
+  let lo = 0;
+  let hi = 2_000_000;
+
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    const testIncomes = incomes.map(inc => (inc.id === targetIncomeId ? { ...inc, amount: mid } : inc));
+    const { netAnual } = computeTaxSummary(testIncomes, ccaa, estadoCivil, hijos, autonomoQuota, autoCalculateQuota);
+    if (netAnual < targetNetAnual) lo = mid; else hi = mid;
+  }
+
+  return (lo + hi) / 2;
+}
+
 export default function App() {
   const [lang, setLang] = useState<Lang>('es');
   const t = translations[lang];
@@ -252,6 +362,13 @@ export default function App() {
   const [employerSSRate, setEmployerSSRate] = useState(31);
   const [includeEmployerCost, setIncludeEmployerCost] = useState(false);
 
+  // Calculadora inversa Neto -> Bruto
+  const [showNetoBruto, setShowNetoBruto] = useState(false);
+  const [netoBrutoIncomeId, setNetoBrutoIncomeId] = useState<number | null>(null);
+  const [netoBrutoPeriod, setNetoBrutoPeriod] = useState<'anual' | 'mensual'>('anual');
+  const [netoBrutoTarget, setNetoBrutoTarget] = useState(20000);
+  const [netoBrutoResult, setNetoBrutoResult] = useState<number | null>(null);
+
   // Estados Personales IRPF
   const [ccaa, setCcaa] = useState('Comunidad Valenciana');
   const [estadoCivil, setEstadoCivil] = useState('soltero');
@@ -262,61 +379,21 @@ export default function App() {
   const [importError, setImportError] = useState<string | null>(null);
 
   // --- LÓGICA DE CÁLCULO ---
+  // Núcleo numérico extraído a una función pura para poder invocarlo también desde el
+  // solucionador neto->bruto (búsqueda por bisección) sin pasar por el useMemo de React.
+  const taxSummary = useMemo(
+    () => computeTaxSummary(incomes, ccaa, estadoCivil, hijos, autonomoQuota, autoCalculateQuota),
+    [incomes, ccaa, estadoCivil, hijos, autonomoQuota, autoCalculateQuota]
+  );
+
   const calculations = useMemo(() => {
-    let grossAnualTotal = 0;
-    let ssEmpleadoAnual = 0;
-    let autonomoGrossAnual = 0;
-    let autonomoExpensesAnual = 0;
+    const {
+      grossAnualTotal, ssTotalAnual, autonomoExpensesAnual, cuotaIRPF_Total, netAnual,
+      rendimientoNetoSSMensual, currentTramo, cuotaFinal, marginalRate, irpfBreakdownRaw,
+      baseImponible, minimoPersonal, autonomoGrossAnual, retencionIRPFAnual, tipoRetencionEstimado,
+      empleadoGrossAnual,
+    } = taxSummary;
 
-    // Sumar ingresos (amount/expenses ya están siempre en anual, ver comentario en la interfaz Income)
-    incomes.forEach(inc => {
-      const anualAmount = Number(inc.amount) || 0;
-      const anualExpenses = Number(inc.expenses) || 0;
-
-      grossAnualTotal += anualAmount;
-
-      if (inc.type === 'empleado') {
-        ssEmpleadoAnual += anualAmount * DEDUCCION_SS_EMPLEADO;
-      } else {
-        autonomoGrossAnual += anualAmount;
-        autonomoExpensesAnual += anualExpenses;
-      }
-    });
-
-    // 1. Autónomo: Calcular Rendimiento para Tramos SS (-7% ded. difícil justificación)
-    const rendimientoNetoSSMensual = autonomoGrossAnual > 0
-      ? ((autonomoGrossAnual - autonomoExpensesAnual) / 12) * 0.93
-      : 0;
-
-    const currentTramo = TRAMOS_AUTONOMO.find(tr => rendimientoNetoSSMensual >= tr.min && rendimientoNetoSSMensual <= tr.max) || TRAMOS_AUTONOMO[0];
-    const safeAutonomoQuota = Number(autonomoQuota) || 0;
-    const cuotaFinal = autoCalculateQuota ? currentTramo.cuota : safeAutonomoQuota;
-    const ssAutonomoAnual = autonomoGrossAnual > 0 ? cuotaFinal * 12 : 0;
-
-    // 2. Autónomo: Calcular Rendimiento para IRPF (-5% ded. difícil justificación)
-    let rendimientoNetoIRPF = autonomoGrossAnual - autonomoExpensesAnual - ssAutonomoAnual;
-    if (rendimientoNetoIRPF > 0) {
-      const deduccionAplicadaIRPF = Math.min(rendimientoNetoIRPF * 0.05, 2000);
-      rendimientoNetoIRPF -= deduccionAplicadaIRPF;
-    } else {
-      rendimientoNetoIRPF = 0;
-    }
-
-    // 3. Mínimo Personal y Familiar
-    let minimoPersonal = 5550;
-    if (hijos >= 1) minimoPersonal += 2400;
-    if (hijos >= 2) minimoPersonal += 2700;
-    if (hijos >= 3) minimoPersonal += 4000;
-    if (hijos >= 4) minimoPersonal += 4500;
-    if (estadoCivil === 'casado_conjunta') minimoPersonal += 3400;
-
-    // 4. Base Imponible
-    const rendimientosTrabajo = (grossAnualTotal - autonomoGrossAnual) - ssEmpleadoAnual;
-    const baseImponible = rendimientosTrabajo + rendimientoNetoIRPF;
-
-    // 5. Cálculo IRPF progresivo (declaración completa: trabajo + autónomo)
-    const tramosAplicables = CCAA_RATES[ccaa as keyof typeof CCAA_RATES];
-    const { cuota: cuotaIRPF_Total, marginalRate, breakdown: irpfBreakdownRaw } = computeIrpfProgressive(baseImponible, minimoPersonal, tramosAplicables);
     // La escala combinada real tiene muchos más puntos de corte que los tramos "de toda la vida"
     // (19%, 24%, 30%, 37%...); se agrupan por esos tramos estatales conocidos, mostrando el tipo
     // combinado medio real de cada uno, sin alterar el importe total de IRPF calculado.
@@ -328,15 +405,7 @@ export default function App() {
       porcentajeDelBruto: grossAnualTotal > 0 ? (g.amount / grossAnualTotal) * 100 : 0
     }));
 
-    // 5b. Retención IRPF estimada que debería aplicar el empleador (solo rendimientos del trabajo)
-    const { cuota: retencionIRPFAnual } = computeIrpfProgressive(Math.max(0, rendimientosTrabajo), minimoPersonal, tramosAplicables);
-    const tipoRetencionEstimado = rendimientosTrabajo > 0 ? (retencionIRPFAnual / rendimientosTrabajo) * 100 : 0;
-
-    const ssTotalAnual = ssEmpleadoAnual + ssAutonomoAnual;
-    const netAnual = grossAnualTotal - ssTotalAnual - cuotaIRPF_Total - autonomoExpensesAnual;
-
-    // 6. Coste para la empresa (Seguridad Social a cargo del empleador)
-    const empleadoGrossAnual = grossAnualTotal - autonomoGrossAnual;
+    // Coste para la empresa (Seguridad Social a cargo del empleador)
     const costeEmpresaAnual = empleadoGrossAnual * (employerSSRate / 100);
     const costeEmpresaTotalAnual = empleadoGrossAnual + costeEmpresaAnual;
 
@@ -375,7 +444,7 @@ export default function App() {
       porcSS: grossAnualTotal > 0 ? (ssTotalAnual / grossAnualTotal) * 100 : 0,
       porcIRPF: grossAnualTotal > 0 ? (cuotaIRPF_Total / grossAnualTotal) * 100 : 0
     };
-  }, [incomes, autonomoQuota, autoCalculateQuota, ccaa, estadoCivil, hijos, employerSSRate, lang, t]);
+  }, [taxSummary, t, formatCurrency]);
 
   // Segmentos del treemap, con el coste de empresa opcionalmente incluido en el total mostrado
   const treemapSegments = useMemo(() => {
@@ -436,6 +505,22 @@ export default function App() {
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
+  };
+
+  const netoBrutoTargetIncomeId = netoBrutoIncomeId ?? incomes[0]?.id ?? null;
+
+  const handleCalcularNetoBruto = () => {
+    if (netoBrutoTargetIncomeId === null) return;
+    const targetAnual = netoBrutoPeriod === 'anual' ? netoBrutoTarget : netoBrutoTarget * 12;
+    const gross = solveGrossForTargetNet(incomes, netoBrutoTargetIncomeId, targetAnual, ccaa, estadoCivil, hijos, autonomoQuota, autoCalculateQuota);
+    setNetoBrutoResult(gross);
+  };
+
+  const handleAplicarNetoBruto = () => {
+    if (netoBrutoTargetIncomeId === null || netoBrutoResult === null) return;
+    const round2 = (n: number) => Math.round(n * 100) / 100;
+    setIncomes(prev => prev.map(inc => (inc.id === netoBrutoTargetIncomeId ? { ...inc, amount: round2(netoBrutoResult) } : inc)));
+    setNetoBrutoResult(null);
   };
 
   const handleExport = () => {
@@ -885,6 +970,63 @@ export default function App() {
                     <p className="text-xs text-slate-500 mb-2">{t.retencionBaseNota}</p>
                     <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
                   </div>
+                </div>
+              )}
+
+              {/* Calculadora Neto -> Bruto */}
+              {incomes.length > 0 && (
+                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                  <button
+                    onClick={() => setShowNetoBruto(!showNetoBruto)}
+                    className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
+                  >
+                    <span className="flex items-center gap-2"><Wallet size={18} className="text-blue-500"/> {t.netoBrutoTitle}</span>
+                    {showNetoBruto ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
+                  </button>
+
+                  {showNetoBruto && (
+                    <div className="mt-4 space-y-3 text-sm">
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 mb-1 block">{t.netoBrutoFuenteLabel}</label>
+                        <select
+                          value={netoBrutoTargetIncomeId ?? ''}
+                          onChange={(e) => { setNetoBrutoIncomeId(Number(e.target.value)); setNetoBrutoResult(null); }}
+                          className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                        >
+                          {incomes.map(inc => <option key={inc.id} value={inc.id}>{inc.name}</option>)}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-slate-500 mb-1 block">{t.netoBrutoDeseadoLabel}</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            value={netoBrutoTarget}
+                            onChange={(e) => { setNetoBrutoTarget(Number(e.target.value) || 0); setNetoBrutoResult(null); }}
+                            className="flex-1 p-2 border border-slate-300 rounded-lg font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
+                            <button type="button" onClick={() => { setNetoBrutoPeriod('mensual'); setNetoBrutoResult(null); }} className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${netoBrutoPeriod === 'mensual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>{t.periodMensual}</button>
+                            <button type="button" onClick={() => { setNetoBrutoPeriod('anual'); setNetoBrutoResult(null); }} className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${netoBrutoPeriod === 'anual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>{t.periodAnual}</button>
+                          </div>
+                        </div>
+                      </div>
+
+                      <button onClick={handleCalcularNetoBruto} className="w-full bg-indigo-50 text-indigo-700 font-semibold py-2 rounded-lg hover:bg-indigo-100 transition-colors">
+                        {t.netoBrutoCalcularBtn}
+                      </button>
+
+                      {netoBrutoResult !== null && (
+                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+                          <p className="text-sm text-indigo-700">{t.netoBrutoResultLabel(formatCurrency(netoBrutoResult), formatCurrency(netoBrutoResult / 12))}</p>
+                          <button onClick={handleAplicarNetoBruto} className="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                            {t.netoBrutoAplicarBtn}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

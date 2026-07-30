@@ -22,6 +22,12 @@ export interface Translations {
   minimoPersonalExento: (amount: string) => string;
   minimoPersonalExentoInfo: string;
   baseImponibleLabel: string;
+  netoBrutoTitle: string;
+  netoBrutoFuenteLabel: string;
+  netoBrutoDeseadoLabel: string;
+  netoBrutoCalcularBtn: string;
+  netoBrutoResultLabel: (anual: string, mensual: string) => string;
+  netoBrutoAplicarBtn: string;
 
   ingresosTitle: string;
   anadir: string;
@@ -122,6 +128,12 @@ export const translations: Record<Lang, Translations> = {
     minimoPersonalExento: (amount) => `Mínimo Personal exento aplicado: ${amount}`,
     minimoPersonalExentoInfo: 'Se descuenta empezando por el tramo más bajo de tu escala, no al tipo marginal: por eso ahorra menos de lo que parece a simple vista.',
     baseImponibleLabel: 'Base Imponible',
+    netoBrutoTitle: '¿Cuánto necesito ganar en bruto?',
+    netoBrutoFuenteLabel: 'Ajustar en la fuente',
+    netoBrutoDeseadoLabel: 'Neto deseado',
+    netoBrutoCalcularBtn: 'Calcular',
+    netoBrutoResultLabel: (anual, mensual) => `Necesitas un bruto de ${anual}/año (${mensual}/mes) en esta fuente.`,
+    netoBrutoAplicarBtn: 'Aplicar a este ingreso',
 
     ingresosTitle: 'Ingresos',
     anadir: 'Añadir',
@@ -222,6 +234,12 @@ export const translations: Record<Lang, Translations> = {
     minimoPersonalExento: (amount) => `Personal tax-free minimum applied: ${amount}`,
     minimoPersonalExentoInfo: 'It\'s deducted starting from your lowest bracket, not at your marginal rate — so it saves you less than it might seem at first glance.',
     baseImponibleLabel: 'Taxable Base',
+    netoBrutoTitle: 'How much do I need to earn gross?',
+    netoBrutoFuenteLabel: 'Adjust on this source',
+    netoBrutoDeseadoLabel: 'Desired net',
+    netoBrutoCalcularBtn: 'Calculate',
+    netoBrutoResultLabel: (anual, mensual) => `You need a gross of ${anual}/year (${mensual}/month) on this source.`,
+    netoBrutoAplicarBtn: 'Apply to this income',
 
     ingresosTitle: 'Income',
     anadir: 'Add',
