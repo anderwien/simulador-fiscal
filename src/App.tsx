@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import type { ChangeEvent } from 'react';
-import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload, Building2, Receipt, Wallet } from 'lucide-react';
+import { PlusCircle, Trash2, Info, TrendingUp, AlertCircle, ChevronDown, ChevronUp, DollarSign, PieChart, Target, Calculator, BarChart, Users, MapPin, Download, Upload, Building2, Receipt, Wallet, X } from 'lucide-react';
 import { translations, type Lang } from './i18n';
 import BreakdownTreemap from './components/BreakdownTreemap';
 
@@ -521,6 +521,7 @@ export default function App() {
     const round2 = (n: number) => Math.round(n * 100) / 100;
     setIncomes(prev => prev.map(inc => (inc.id === netoBrutoTargetIncomeId ? { ...inc, amount: round2(netoBrutoResult) } : inc)));
     setNetoBrutoResult(null);
+    setShowNetoBruto(false);
   };
 
   const handleExport = () => {
@@ -860,6 +861,15 @@ export default function App() {
                 </div>
               </div>
 
+              {incomes.length > 0 && (
+                <button
+                  onClick={() => setShowNetoBruto(true)}
+                  className="w-full bg-white p-4 rounded-2xl shadow-sm border border-slate-200 flex items-center justify-center gap-2 text-sm font-semibold text-indigo-600 hover:bg-indigo-50 transition-colors"
+                >
+                  <Wallet size={16} /> {t.netoBrutoTitle}
+                </button>
+              )}
+
               {/* Información Técnica */}
               <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-base font-semibold text-slate-800 flex items-center gap-2 mb-4"><Info size={18} className="text-blue-500"/> {t.infoTecnicaTitle}</h2>
@@ -973,63 +983,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Calculadora Neto -> Bruto */}
-              {incomes.length > 0 && (
-                <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                  <button
-                    onClick={() => setShowNetoBruto(!showNetoBruto)}
-                    className="w-full flex items-center justify-between text-base font-semibold text-slate-800 hover:text-indigo-600 transition-colors"
-                  >
-                    <span className="flex items-center gap-2"><Wallet size={18} className="text-blue-500"/> {t.netoBrutoTitle}</span>
-                    {showNetoBruto ? <ChevronUp size={18}/> : <ChevronDown size={18}/>}
-                  </button>
-
-                  {showNetoBruto && (
-                    <div className="mt-4 space-y-3 text-sm">
-                      <div>
-                        <label className="text-xs font-medium text-slate-500 mb-1 block">{t.netoBrutoFuenteLabel}</label>
-                        <select
-                          value={netoBrutoTargetIncomeId ?? ''}
-                          onChange={(e) => { setNetoBrutoIncomeId(Number(e.target.value)); setNetoBrutoResult(null); }}
-                          className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
-                        >
-                          {incomes.map(inc => <option key={inc.id} value={inc.id}>{inc.name}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="text-xs font-medium text-slate-500 mb-1 block">{t.netoBrutoDeseadoLabel}</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            value={netoBrutoTarget}
-                            onChange={(e) => { setNetoBrutoTarget(Number(e.target.value) || 0); setNetoBrutoResult(null); }}
-                            className="flex-1 p-2 border border-slate-300 rounded-lg font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
-                          />
-                          <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
-                            <button type="button" onClick={() => { setNetoBrutoPeriod('mensual'); setNetoBrutoResult(null); }} className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${netoBrutoPeriod === 'mensual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>{t.periodMensual}</button>
-                            <button type="button" onClick={() => { setNetoBrutoPeriod('anual'); setNetoBrutoResult(null); }} className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${netoBrutoPeriod === 'anual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>{t.periodAnual}</button>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button onClick={handleCalcularNetoBruto} className="w-full bg-indigo-50 text-indigo-700 font-semibold py-2 rounded-lg hover:bg-indigo-100 transition-colors">
-                        {t.netoBrutoCalcularBtn}
-                      </button>
-
-                      {netoBrutoResult !== null && (
-                        <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
-                          <p className="text-sm text-indigo-700">{t.netoBrutoResultLabel(formatCurrency(netoBrutoResult), formatCurrency(netoBrutoResult / 12))}</p>
-                          <button onClick={handleAplicarNetoBruto} className="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm">
-                            {t.netoBrutoAplicarBtn}
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-
               {/* Panel Cuota & Optimización */}
               {calculations.hasAutonomo && (
                 <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
@@ -1115,6 +1068,70 @@ export default function App() {
 
         </div>
       </div>
+
+      {/* Modal: Calculadora Neto -> Bruto */}
+      {showNetoBruto && (
+        <div
+          className="fixed inset-0 z-[100] bg-slate-900/40 flex items-center justify-center p-4"
+          onClick={() => setShowNetoBruto(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                <Wallet size={20} className="text-blue-500"/> {t.netoBrutoTitle}
+              </h2>
+              <button onClick={() => setShowNetoBruto(false)} className="text-slate-400 hover:text-slate-600 p-1">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-sm">
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1 block">{t.netoBrutoFuenteLabel}</label>
+                <select
+                  value={netoBrutoTargetIncomeId ?? ''}
+                  onChange={(e) => { setNetoBrutoIncomeId(Number(e.target.value)); setNetoBrutoResult(null); }}
+                  className="w-full p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {incomes.map(inc => <option key={inc.id} value={inc.id}>{inc.name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label className="text-xs font-medium text-slate-500 mb-1 block">{t.netoBrutoDeseadoLabel}</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    value={netoBrutoTarget}
+                    onChange={(e) => { setNetoBrutoTarget(Number(e.target.value) || 0); setNetoBrutoResult(null); }}
+                    className="flex-1 p-2 border border-slate-300 rounded-lg font-medium text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                  <div className="flex items-center bg-slate-100 p-1 rounded-lg border border-slate-200 shrink-0">
+                    <button type="button" onClick={() => { setNetoBrutoPeriod('mensual'); setNetoBrutoResult(null); }} className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${netoBrutoPeriod === 'mensual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>{t.periodMensual}</button>
+                    <button type="button" onClick={() => { setNetoBrutoPeriod('anual'); setNetoBrutoResult(null); }} className={`text-xs font-semibold px-2.5 py-1 rounded-md transition-colors ${netoBrutoPeriod === 'anual' ? 'bg-white shadow-sm text-slate-800' : 'text-slate-500'}`}>{t.periodAnual}</button>
+                  </div>
+                </div>
+              </div>
+
+              <button onClick={handleCalcularNetoBruto} className="w-full bg-indigo-50 text-indigo-700 font-semibold py-2 rounded-lg hover:bg-indigo-100 transition-colors">
+                {t.netoBrutoCalcularBtn}
+              </button>
+
+              {netoBrutoResult !== null && (
+                <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-3 space-y-2">
+                  <p className="text-sm text-indigo-700">{t.netoBrutoResultLabel(formatCurrency(netoBrutoResult), formatCurrency(netoBrutoResult / 12))}</p>
+                  <button onClick={handleAplicarNetoBruto} className="w-full bg-indigo-600 text-white font-semibold py-2 rounded-lg hover:bg-indigo-700 transition-colors text-sm">
+                    {t.netoBrutoAplicarBtn}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
