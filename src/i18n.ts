@@ -20,6 +20,8 @@ export interface Translations {
   hijosACargo: string;
   hijosOptions: { ninguno: string; masDe4: string };
   minimoPersonalExento: (amount: string) => string;
+  minimoPersonalExentoInfo: string;
+  baseImponibleLabel: string;
 
   ingresosTitle: string;
   anadir: string;
@@ -74,6 +76,7 @@ export interface Translations {
   retencionMensualLabel: string;
   tipoRetencionLabel: (pct: string) => string;
   tipoRetencionSublabel: string;
+  retencionBaseNota: string;
   retencionCaveat: string;
 
   breakdownTitle: string;
@@ -117,6 +120,8 @@ export const translations: Record<Lang, Translations> = {
     hijosACargo: 'Hijos a cargo',
     hijosOptions: { ninguno: 'Ninguno', masDe4: '4 o más' },
     minimoPersonalExento: (amount) => `Mínimo Personal exento aplicado: ${amount}`,
+    minimoPersonalExentoInfo: 'Se descuenta empezando por el tramo más bajo de tu escala, no al tipo marginal: por eso ahorra menos de lo que parece a simple vista.',
+    baseImponibleLabel: 'Base Imponible',
 
     ingresosTitle: 'Ingresos',
     anadir: 'Añadir',
@@ -171,6 +176,7 @@ export const translations: Record<Lang, Translations> = {
     retencionMensualLabel: 'Retención mensual estimada',
     tipoRetencionLabel: (pct) => `${pct}%`,
     tipoRetencionSublabel: 'Tipo de retención estimado',
+    retencionBaseNota: 'Este tipo se calcula sobre tu base neta de Seguridad Social, no sobre el bruto — por eso no coincide con el "IRPF Medio" de la cabecera, que sí se calcula sobre el bruto.',
     retencionCaveat: 'Estimación según el procedimiento general de retenciones (Art. 82-89 del Reglamento del IRPF), considerando solo tus rendimientos del trabajo. La retención real de tu nómina puede variar ligeramente (gastos deducibles del trabajador, otros pagadores, fecha de inicio del contrato, etc.).',
 
     breakdownTitle: 'A dónde va cada Euro de tu Bruto Total',
@@ -214,6 +220,8 @@ export const translations: Record<Lang, Translations> = {
     hijosACargo: 'Dependent children',
     hijosOptions: { ninguno: 'None', masDe4: '4 or more' },
     minimoPersonalExento: (amount) => `Personal tax-free minimum applied: ${amount}`,
+    minimoPersonalExentoInfo: 'It\'s deducted starting from your lowest bracket, not at your marginal rate — so it saves you less than it might seem at first glance.',
+    baseImponibleLabel: 'Taxable Base',
 
     ingresosTitle: 'Income',
     anadir: 'Add',
@@ -268,6 +276,7 @@ export const translations: Record<Lang, Translations> = {
     retencionMensualLabel: 'Estimated monthly withholding',
     tipoRetencionLabel: (pct) => `${pct}%`,
     tipoRetencionSublabel: 'Estimated withholding rate',
+    retencionBaseNota: 'This rate is calculated on your Social-Security-net base, not on your gross salary — that\'s why it doesn\'t match the "Avg. Income Tax" figure in the header, which is calculated on the gross amount.',
     retencionCaveat: 'Estimated using the general withholding procedure (Spanish Income Tax Regulation, Art. 82-89), considering only your earned income. Your actual payslip withholding may differ slightly (worker-specific deductions, other payers, contract start date, etc.).',
 
     breakdownTitle: 'Where Every Euro of Your Gross Income Goes',

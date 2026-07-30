@@ -647,8 +647,9 @@ export default function App() {
                       </select>
                     </div>
                   </div>
-                  <div className="mt-2 text-xs text-indigo-600 font-medium p-2 bg-indigo-50 rounded-lg border border-indigo-100">
-                    {t.minimoPersonalExento(formatCurrency(calculations.minimoPersonal))}
+                  <div className="mt-2 text-xs text-indigo-600 p-2 bg-indigo-50 rounded-lg border border-indigo-100">
+                    <p className="font-medium">{t.minimoPersonalExento(formatCurrency(calculations.minimoPersonal))}</p>
+                    <p className="text-indigo-400 mt-0.5">{t.minimoPersonalExentoInfo}</p>
                   </div>
                 </div>
               </div>
@@ -823,9 +824,15 @@ export default function App() {
 
               {/* GRÁFICO TOTAL DEL BRUTO */}
               <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                 <h3 className="text-lg font-semibold text-slate-800 mb-4 flex items-center gap-2">
-                  <BarChart size={20} className="text-blue-500"/> {t.breakdownTitle}
-                </h3>
+                 <div className="flex justify-between items-start gap-3 mb-4">
+                  <h3 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
+                    <BarChart size={20} className="text-blue-500"/> {t.breakdownTitle}
+                  </h3>
+                  <div className="text-right shrink-0">
+                    <p className="text-[10px] font-semibold text-slate-400 uppercase tracking-wide">{t.baseImponibleLabel}</p>
+                    <p className="text-sm font-bold text-slate-700">{formatCurrency(calculations.baseImponible)}</p>
+                  </div>
+                </div>
                 {calculations.hasEmpleado && (
                   <label className="flex items-center gap-2 text-xs font-medium text-slate-600 mb-3 cursor-pointer select-none">
                     <input type="checkbox" checked={includeEmployerCost} onChange={() => setIncludeEmployerCost(v => !v)} className="rounded accent-indigo-600"/>
@@ -875,6 +882,7 @@ export default function App() {
                       <p className="text-4xl font-black text-indigo-600">{t.tipoRetencionLabel(calculations.tipoRetencionEstimado.toFixed(1))}</p>
                     </div>
                     <p className="text-sm text-slate-600 mb-3">{t.retencionMensualLabel}: <span className="font-semibold text-slate-700">{formatCurrency(calculations.retencionIRPFMensual)}</span></p>
+                    <p className="text-xs text-slate-500 mb-2">{t.retencionBaseNota}</p>
                     <p className="text-xs text-slate-400">{t.retencionCaveat}</p>
                   </div>
                 </div>
